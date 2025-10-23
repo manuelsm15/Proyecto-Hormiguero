@@ -45,3 +45,4 @@ networks:
 volumes:
   logs:
   test-results:
+

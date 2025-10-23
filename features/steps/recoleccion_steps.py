@@ -461,3 +461,4 @@ def step_impl(context):
 def step_impl(context):
     """Verifica el estado de la tarea."""
     assert context.tarea.estado == EstadoTarea.PAUSADA
+

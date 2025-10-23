@@ -11,3 +11,4 @@ def step_impl(context):
 @then("debo obtener un resultado exitoso")
 def step_impl(context):
     assert context.resultado == "exitoso"
+

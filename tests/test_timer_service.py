@@ -179,3 +179,4 @@ class TestTimerService:
         # Verificar que se limpió todo
         assert len(timer_service.tareas_en_proceso) == 0
         assert len(timer_service.timer_tasks) == 0
+

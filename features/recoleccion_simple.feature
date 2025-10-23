@@ -22,3 +22,4 @@ Feature: Subsistema de Recoleccion de Alimentos
     Given que necesito 3 hormigas para una tarea
     When solicito las hormigas al subsistema de comunicacion
     Then debo recibir las hormigas solicitadas
+

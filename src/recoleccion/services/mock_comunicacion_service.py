@@ -103,3 +103,4 @@ class MockComunicacionService(ComunicacionService):
         self.mensajes.clear()
         self.respuestas_hormigas.clear()
         self.contador_mensajes = 0
+

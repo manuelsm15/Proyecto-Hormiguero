@@ -24,3 +24,4 @@ class EstadoHormiga(Enum):
     
     # Hormiga muerta o inactiva
     MUERTA = "muerta"
+

@@ -91,3 +91,4 @@ class ComunicacionService(ABC):
             True si está disponible, False en caso contrario
         """
         pass
+

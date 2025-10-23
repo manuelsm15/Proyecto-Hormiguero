@@ -18,7 +18,8 @@ logging.basicConfig(
 )
 
 # Agregar el directorio actual al path
-sys.path.append(str(Path(__file__).parent))
+current_dir = Path.cwd()
+sys.path.append(str(current_dir))
 
 try:
     from src.recoleccion.api.recoleccion_controller import create_app
@@ -32,11 +33,11 @@ try:
     # Crear la aplicación FastAPI
     app = create_app(entorno_service, comunicacion_service)
     
-    print("✅ Aplicación FastAPI creada exitosamente")
-    print(f"✅ Servicios mock inicializados")
+    print("Aplicacion FastAPI creada exitosamente")
+    print(f"Servicios mock inicializados")
     
 except Exception as e:
-    print(f"❌ Error creando aplicación: {e}")
+    print(f"Error creando aplicacion: {e}")
     sys.exit(1)
 
 # Configuración para Railway
@@ -45,16 +46,16 @@ if __name__ == "__main__":
         # Obtener puerto de Railway o usar 8000 por defecto
         port = int(os.environ.get("PORT", 8000))
         
-        print(f"🚀 Iniciando servidor en puerto {port}")
-        print(f"🌐 Host: 0.0.0.0")
-        print(f"🏥 Healthcheck: /health")
+        print(f"Iniciando servidor en puerto {port}")
+        print(f"Host: 0.0.0.0")
+        print(f"Healthcheck: /health")
         
-        # Configurar uvicorn para Railway - Configuración optimizada
+        # Configurar uvicorn para Railway - Configuración mínima
         config = uvicorn.Config(
             app=app,
             host="0.0.0.0",
             port=port,
-            log_level="error",  # Solo errores críticos
+            log_level="critical",  # Solo errores críticos
             access_log=False,
             reload=False,
             server_header=False,
@@ -70,5 +71,5 @@ if __name__ == "__main__":
         server.run()
         
     except Exception as e:
-        print(f"❌ Error iniciando servidor: {e}")
+        print(f"Error iniciando servidor: {e}")
         sys.exit(1)

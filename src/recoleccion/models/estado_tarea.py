@@ -27,3 +27,4 @@ class EstadoTarea(Enum):
     
     # Tarea pausada por falta de hormigas vivas
     PAUSADA = "pausada"
+

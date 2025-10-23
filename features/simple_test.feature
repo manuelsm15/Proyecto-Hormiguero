@@ -7,3 +7,4 @@ Feature: Simple Test
     Given que tengo un sistema funcionando
     When ejecuto una prueba
     Then debo obtener un resultado exitoso
+
