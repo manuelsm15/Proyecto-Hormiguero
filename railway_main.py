@@ -4,8 +4,18 @@ Aplicación principal optimizada para Railway.
 
 import os
 import sys
+import logging
 import uvicorn
 from pathlib import Path
+
+# Configurar logging para Railway
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(levelname)s: %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
 # Agregar el directorio actual al path
 sys.path.append(str(Path(__file__).parent))
@@ -37,17 +47,25 @@ if __name__ == "__main__":
         
         print(f"🚀 Iniciando servidor en puerto {port}")
         print(f"🌐 Host: 0.0.0.0")
-        print(f"📊 Log level: info")
         
-        # Ejecutar la aplicación con configuración optimizada para Railway
-        uvicorn.run(
-            app,
+        # Configurar uvicorn para Railway
+        config = uvicorn.Config(
+            app=app,
             host="0.0.0.0",
             port=port,
-            log_level="warning",  # Cambiar a warning para evitar logs innecesarios
-            access_log=False,     # Deshabilitar access logs
-            reload=False          # Deshabilitar reload en producción
+            log_level="warning",
+            access_log=False,
+            reload=False,
+            server_header=False,
+            date_header=False
         )
+        
+        # Crear servidor
+        server = uvicorn.Server(config)
+        
+        # Ejecutar servidor
+        server.run()
+        
     except Exception as e:
         print(f"❌ Error iniciando servidor: {e}")
         sys.exit(1)
