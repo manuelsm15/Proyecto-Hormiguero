@@ -1,0 +1,9 @@
+Feature: Simple Test # features/simple_test.feature:1
+  Como desarrollador
+  Necesito probar que Behave funciona
+  Para verificar la configuracion
+  Scenario: Test basico                    # features/simple_test.feature:6
+    Given que tengo un sistema funcionando # features/steps/simple_steps.py:3
+    When ejecuto una prueba                # features/steps/simple_steps.py:7
+    Then debo obtener un resultado exitoso # features/steps/simple_steps.py:11
+

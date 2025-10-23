@@ -1,0 +1,29 @@
+# Dependencias principales
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+httpx==0.25.2
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+pytest-asyncio==0.21.1
+
+# BDD Testing
+behave==1.2.6
+allure-behave==2.13.2
+
+# Allure Reporting
+allure-pytest==2.13.2
+
+# Data validation and serialization
+marshmallow==3.20.1
+
+# Logging
+loguru==0.7.2
+
+# Development tools
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
