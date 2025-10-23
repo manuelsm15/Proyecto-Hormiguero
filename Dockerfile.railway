@@ -1,6 +1,12 @@
 # Usa una imagen base de Python ligera
 FROM python:3.12-slim-buster
 
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Establece el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
@@ -11,9 +17,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copia el resto del código de la aplicación
 COPY . .
 
+# Crear directorios necesarios
+RUN mkdir -p allure-results allure-report htmlcov
+
 # Expone el puerto en el que la aplicación se ejecutará
 EXPOSE 8000
 
-# Comando para iniciar la aplicación usando Uvicorn
-# Asegúrate de que 'main:app' apunte a tu instancia de FastAPI
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Comando para iniciar la aplicación usando el archivo optimizado para Railway
+CMD ["python", "railway_main.py"]
