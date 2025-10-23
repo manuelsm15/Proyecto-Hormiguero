@@ -39,13 +39,14 @@ if __name__ == "__main__":
         print(f"🌐 Host: 0.0.0.0")
         print(f"📊 Log level: info")
         
-        # Ejecutar la aplicación
+        # Ejecutar la aplicación con configuración optimizada para Railway
         uvicorn.run(
             app,
             host="0.0.0.0",
             port=port,
-            log_level="info",
-            access_log=True
+            log_level="warning",  # Cambiar a warning para evitar logs innecesarios
+            access_log=False,     # Deshabilitar access logs
+            reload=False          # Deshabilitar reload en producción
         )
     except Exception as e:
         print(f"❌ Error iniciando servidor: {e}")
