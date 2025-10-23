@@ -8,9 +8,9 @@ import logging
 import uvicorn
 from pathlib import Path
 
-# Configurar logging para Railway
+# Configurar logging para Railway - Solo errores críticos
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.ERROR,
     format='%(levelname)s: %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout)
@@ -47,17 +47,20 @@ if __name__ == "__main__":
         
         print(f"🚀 Iniciando servidor en puerto {port}")
         print(f"🌐 Host: 0.0.0.0")
+        print(f"🏥 Healthcheck: /health")
         
-        # Configurar uvicorn para Railway
+        # Configurar uvicorn para Railway - Configuración optimizada
         config = uvicorn.Config(
             app=app,
             host="0.0.0.0",
             port=port,
-            log_level="warning",
+            log_level="error",  # Solo errores críticos
             access_log=False,
             reload=False,
             server_header=False,
-            date_header=False
+            date_header=False,
+            use_colors=False,  # Deshabilitar colores
+            loop="asyncio"     # Loop específico
         )
         
         # Crear servidor
