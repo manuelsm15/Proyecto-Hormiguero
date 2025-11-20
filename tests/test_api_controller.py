@@ -314,3 +314,134 @@ class TestRecoleccionController:
             mock_persistence.actualizar_alimento_disponibilidad.assert_called_once_with(
                 alimento_ejemplo.id, False
             )
+
+    def test_asignar_hormigas_con_lote_id_e_inicio_automatico(
+        self, client, mock_entorno_service, mock_comunicacion_service, alimento_ejemplo, hormiga_ejemplo
+    ):
+        """Prueba la asignación de hormigas con lote_id que inicia automáticamente la tarea."""
+        from src.recoleccion.services.recoleccion_service import RecoleccionService
+        from src.recoleccion.models.tarea_recoleccion import TareaRecoleccion
+        
+        # Arrange
+        recoleccion_service = RecoleccionService(mock_entorno_service, mock_comunicacion_service)
+        tarea = TareaRecoleccion(id="tarea_001", alimento=alimento_ejemplo)
+        recoleccion_service.tareas_activas.append(tarea)
+        
+        mock_comunicacion_service.is_disponible.return_value = True
+        mock_comunicacion_service.solicitar_hormigas.return_value = "mensaje_001"
+        mock_comunicacion_service.consultar_respuesta_hormigas.return_value = [hormiga_ejemplo] * 3
+        
+        app = create_app(mock_entorno_service, mock_comunicacion_service)
+        app.state.recoleccion_service = recoleccion_service
+        
+        with TestClient(app) as test_client:
+            # Act
+            response = test_client.post(
+                "/tareas/tarea_001/asignar-hormigas",
+                json={
+                    "hormigas_lote_id": "LOTE_001",
+                    "cantidad": 3
+                }
+            )
+            
+            # Assert
+            assert response.status_code == 200
+            data = response.json()
+            assert data["iniciada"] is True
+            assert data["hormigas_lote_id"] == "LOTE_001"
+            assert data["estado"] == "en_proceso"
+
+    def test_asignar_hormigas_sin_lote_id_no_inicia(
+        self, client, mock_entorno_service, mock_comunicacion_service, alimento_ejemplo, hormiga_ejemplo
+    ):
+        """Prueba que asignar hormigas sin lote_id no inicia la tarea automáticamente."""
+        from src.recoleccion.services.recoleccion_service import RecoleccionService
+        from src.recoleccion.models.tarea_recoleccion import TareaRecoleccion
+        
+        # Arrange
+        recoleccion_service = RecoleccionService(mock_entorno_service, mock_comunicacion_service)
+        tarea = TareaRecoleccion(id="tarea_001", alimento=alimento_ejemplo)
+        recoleccion_service.tareas_activas.append(tarea)
+        
+        mock_comunicacion_service.is_disponible.return_value = True
+        mock_comunicacion_service.solicitar_hormigas.return_value = "mensaje_001"
+        mock_comunicacion_service.consultar_respuesta_hormigas.return_value = [hormiga_ejemplo] * 3
+        
+        app = create_app(mock_entorno_service, mock_comunicacion_service)
+        app.state.recoleccion_service = recoleccion_service
+        
+        with TestClient(app) as test_client:
+            # Act
+            response = test_client.post(
+                "/tareas/tarea_001/asignar-hormigas",
+                json={
+                    "cantidad": 3
+                }
+            )
+            
+            # Assert
+            assert response.status_code == 200
+            data = response.json()
+            assert data["iniciada"] is False
+            assert data.get("hormigas_lote_id") is None
+
+    def test_iniciar_tarea_con_lote_id(
+        self, client, mock_entorno_service, mock_comunicacion_service, alimento_ejemplo, hormiga_ejemplo
+    ):
+        """Prueba el inicio de tarea con lote_id."""
+        from src.recoleccion.services.recoleccion_service import RecoleccionService
+        from src.recoleccion.models.tarea_recoleccion import TareaRecoleccion
+        
+        # Arrange
+        recoleccion_service = RecoleccionService(mock_entorno_service, mock_comunicacion_service)
+        tarea = TareaRecoleccion(id="tarea_001", alimento=alimento_ejemplo)
+        tarea.hormigas_asignadas = [hormiga_ejemplo] * 3
+        recoleccion_service.tareas_activas.append(tarea)
+        
+        app = create_app(mock_entorno_service, mock_comunicacion_service)
+        app.state.recoleccion_service = recoleccion_service
+        
+        with TestClient(app) as test_client:
+            # Act
+            response = test_client.post(
+                "/tareas/tarea_001/iniciar",
+                json={
+                    "hormigas_lote_id": "LOTE_001"
+                }
+            )
+            
+            # Assert
+            assert response.status_code == 200
+            data = response.json()
+            assert data["hormigas_lote_id"] == "LOTE_001"
+            assert data["estado"] == "en_proceso"
+
+    def test_status_incluye_hormigas_lote_id(
+        self, client, mock_entorno_service, mock_comunicacion_service, alimento_ejemplo, hormiga_ejemplo
+    ):
+        """Prueba que el status incluye el hormigas_lote_id."""
+        from src.recoleccion.services.recoleccion_service import RecoleccionService
+        from src.recoleccion.models.tarea_recoleccion import TareaRecoleccion
+        from src.recoleccion.models.estado_tarea import EstadoTarea
+        from datetime import datetime
+        
+        # Arrange
+        recoleccion_service = RecoleccionService(mock_entorno_service, mock_comunicacion_service)
+        tarea = TareaRecoleccion(id="tarea_001", alimento=alimento_ejemplo)
+        tarea.hormigas_asignadas = [hormiga_ejemplo] * 3
+        tarea.hormigas_lote_id = "LOTE_001"
+        tarea.estado = EstadoTarea.EN_PROCESO
+        tarea.fecha_inicio = datetime.now()
+        recoleccion_service.tareas_activas.append(tarea)
+        
+        app = create_app(mock_entorno_service, mock_comunicacion_service)
+        app.state.recoleccion_service = recoleccion_service
+        
+        with TestClient(app) as test_client:
+            # Act
+            response = test_client.get("/tareas/tarea_001/status")
+            
+            # Assert
+            assert response.status_code == 200
+            data = response.json()
+            assert data["hormigas_lote_id"] == "LOTE_001"

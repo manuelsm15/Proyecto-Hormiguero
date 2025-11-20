@@ -105,3 +105,56 @@ Feature: Subsistema de Recoleccion de Alimentos
     When verifico el estado de las hormigas
     Then la tarea debe pausarse
     And la tarea debe estar en estado PAUSADA
+
+  @unitario
+  Scenario: Asignar hormigas con lote_id
+    Given que tengo una tarea de recolección
+    And tengo hormigas disponibles
+    When asigno las hormigas a la tarea con lote_id "LOTE_001"
+    Then la tarea debe tener las hormigas asignadas
+    And la tarea debe tener el hormigas_lote_id "LOTE_001"
+
+  @unitario
+  Scenario: Iniciar tarea automáticamente al asignar hormigas con lote_id
+    Given que tengo una tarea de recolección
+    And tengo hormigas disponibles
+    When asigno las hormigas a la tarea con lote_id "LOTE_001"
+    And la tarea tiene suficientes hormigas
+    Then la tarea debe iniciarse automáticamente
+    And la tarea debe estar en estado EN_PROCESO
+    And la tarea debe tener el hormigas_lote_id "LOTE_001"
+
+  @unitario
+  Scenario: Iniciar tarea con hormigas_lote_id
+    Given que tengo una tarea con suficientes hormigas asignadas
+    When inicio la tarea de recolección con lote_id "LOTE_001"
+    Then la tarea debe estar en estado EN_PROCESO
+    And la tarea debe tener el hormigas_lote_id "LOTE_001"
+    And la tarea debe tener fecha de inicio
+
+  @integracion
+  Scenario: Completar tarea automáticamente por tiempo transcurrido
+    Given que tengo una tarea en estado EN_PROCESO
+    And la tarea tiene fecha de inicio
+    And ha transcurrido el tiempo de recolección completo
+    When verifico si la tarea debe completarse automáticamente
+    Then la tarea debe estar en estado COMPLETADA
+    And la tarea debe tener fecha de finalización
+    And el alimento debe estar marcado como no disponible (agotado)
+    And la fecha de finalización debe ser fecha_inicio + tiempo_recoleccion
+
+  @integracion
+  Scenario: No completar tarea si no ha transcurrido el tiempo suficiente
+    Given que tengo una tarea en estado EN_PROCESO
+    And la tarea tiene fecha de inicio
+    And solo ha transcurrido la mitad del tiempo de recolección
+    When verifico si la tarea debe completarse automáticamente
+    Then la tarea debe permanecer en estado EN_PROCESO
+    And la tarea no debe tener fecha de finalización
+
+  @integracion
+  Scenario: Verificar status incluye hormigas_lote_id
+    Given que tengo una tarea en estado EN_PROCESO
+    And la tarea tiene hormigas_lote_id "LOTE_001"
+    When consulto el status de la tarea
+    Then el status debe incluir el hormigas_lote_id "LOTE_001"

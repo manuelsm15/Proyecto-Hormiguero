@@ -89,15 +89,31 @@ class DatabaseManager:
             )
         """)
         
-        # Tabla de asignaciones hormiga-tarea
+        # Tabla de lotes de hormigas
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS lotes_hormigas (
+                lote_id TEXT PRIMARY KEY,
+                tarea_id TEXT NOT NULL,
+                cantidad_hormigas_enviadas INTEGER NOT NULL,
+                cantidad_hormigas_requeridas INTEGER NOT NULL,
+                estado TEXT NOT NULL DEFAULT 'pendiente',
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fecha_aceptacion TIMESTAMP,
+                FOREIGN KEY (tarea_id) REFERENCES tareas (id)
+            )
+        """)
+        
+        # Tabla de asignaciones hormiga-tarea (modificada para incluir lote_id)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS asignaciones_hormiga_tarea (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 tarea_id TEXT NOT NULL,
                 hormiga_id TEXT NOT NULL,
+                lote_id TEXT,
                 fecha_asignacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (tarea_id) REFERENCES tareas (id),
-                FOREIGN KEY (hormiga_id) REFERENCES hormigas (id)
+                FOREIGN KEY (hormiga_id) REFERENCES hormigas (id),
+                FOREIGN KEY (lote_id) REFERENCES lotes_hormigas (lote_id)
             )
         """)
         
@@ -270,12 +286,30 @@ class DatabaseManager:
                     alimento_recolectado=row['alimento_recolectado']
                 )
                 
-                # Obtener hormigas asignadas
+                # Obtener lote_id de la tarea (si existe en la tabla de tareas)
+                # Primero intentar obtener desde lotes_hormigas
                 cursor.execute("""
-                    SELECT h.* FROM hormigas h
-                    JOIN asignaciones_hormiga_tarea aht ON h.id = aht.hormiga_id
-                    WHERE aht.tarea_id = ?
+                    SELECT lote_id FROM lotes_hormigas WHERE tarea_id = ? LIMIT 1
                 """, (tarea.id,))
+                lote_row = cursor.fetchone()
+                
+                if lote_row:
+                    lote_id = lote_row[0]
+                    tarea.hormigas_lote_id = lote_id
+                    # Obtener hormigas desde el lote
+                    cursor.execute("""
+                        SELECT h.* FROM hormigas h
+                        JOIN asignaciones_hormiga_tarea aht ON h.id = aht.hormiga_id
+                        WHERE aht.lote_id = ?
+                    """, (lote_id,))
+                else:
+                    # Fallback: obtener hormigas directamente por tarea_id (compatibilidad)
+                    cursor.execute("""
+                        SELECT h.* FROM hormigas h
+                        JOIN asignaciones_hormiga_tarea aht ON h.id = aht.hormiga_id
+                        WHERE aht.tarea_id = ? AND aht.lote_id IS NULL
+                    """, (tarea.id,))
+                
                 hormiga_rows = cursor.fetchall()
                 
                 for hormiga_row in hormiga_rows:
@@ -416,6 +450,228 @@ class DatabaseManager:
         except Exception as e:
             self.last_error = str(e)
             print(f"Error obteniendo mensajes (SQLite): {e}")
+            return []
+
+    def crear_lote_hormigas(
+        self, 
+        lote_id: str, 
+        tarea_id: str, 
+        cantidad_enviada: int, 
+        cantidad_requerida: int
+    ) -> bool:
+        """
+        Crea un lote de hormigas con validación de cantidad.
+        
+        Args:
+            lote_id: ID único del lote
+            tarea_id: ID de la tarea asociada
+            cantidad_enviada: Cantidad de hormigas enviadas
+            cantidad_requerida: Cantidad de hormigas requeridas
+            
+        Returns:
+            True si se creó exitosamente, False si la cantidad es insuficiente
+        """
+        try:
+            # Validar que cantidad_enviada >= cantidad_requerida
+            if cantidad_enviada < cantidad_requerida:
+                self.last_error = f"Cantidad insuficiente de hormigas. Enviadas: {cantidad_enviada}, Requeridas: {cantidad_requerida}"
+                return False
+            
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                INSERT INTO lotes_hormigas 
+                (lote_id, tarea_id, cantidad_hormigas_enviadas, cantidad_hormigas_requeridas, estado)
+                VALUES (?, ?, ?, ?, 'pendiente')
+            """, (lote_id, tarea_id, cantidad_enviada, cantidad_requerida))
+            self.connection.commit()
+            return True
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Error creando lote de hormigas: {e}")
+            return False
+    
+    def aceptar_lote_hormigas(self, lote_id: str) -> bool:
+        """
+        Acepta un lote de hormigas y lo marca como aceptado.
+        
+        Args:
+            lote_id: ID del lote a aceptar
+            
+        Returns:
+            True si se aceptó exitosamente, False si el lote está en uso o no existe
+        """
+        try:
+            cursor = self.connection.cursor()
+            # Verificar que el lote existe y no está en uso
+            cursor.execute("""
+                SELECT estado FROM lotes_hormigas WHERE lote_id = ?
+            """, (lote_id,))
+            row = cursor.fetchone()
+            
+            if not row:
+                self.last_error = f"Lote {lote_id} no encontrado"
+                return False
+            
+            estado_actual = row[0]
+            if estado_actual == 'en_uso':
+                self.last_error = f"Lote {lote_id} ya está en uso"
+                return False
+            
+            # Marcar como aceptado
+            cursor.execute("""
+                UPDATE lotes_hormigas 
+                SET estado = 'aceptado', fecha_aceptacion = CURRENT_TIMESTAMP
+                WHERE lote_id = ?
+            """, (lote_id,))
+            self.connection.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Error aceptando lote de hormigas: {e}")
+            return False
+    
+    def marcar_lote_en_uso(self, lote_id: str) -> bool:
+        """
+        Marca un lote como en uso.
+        
+        Args:
+            lote_id: ID del lote
+            
+        Returns:
+            True si se marcó exitosamente
+        """
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                UPDATE lotes_hormigas 
+                SET estado = 'en_uso'
+                WHERE lote_id = ?
+            """, (lote_id,))
+            self.connection.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Error marcando lote en uso: {e}")
+            return False
+    
+    def verificar_lote_disponible(self, lote_id: str, cantidad_requerida: int) -> tuple[bool, Optional[str]]:
+        """
+        Verifica que un lote esté disponible y tenga cantidad suficiente.
+        
+        Args:
+            lote_id: ID del lote a verificar
+            cantidad_requerida: Cantidad de hormigas requeridas
+            
+        Returns:
+            Tupla (es_valido, mensaje_error)
+        """
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT estado, cantidad_hormigas_enviadas 
+                FROM lotes_hormigas 
+                WHERE lote_id = ?
+            """, (lote_id,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return False, f"Lote {lote_id} no encontrado"
+            
+            estado, cantidad_enviada = row[0], row[1]
+            
+            if estado == 'en_uso':
+                return False, f"Lote {lote_id} ya está en uso"
+            
+            if cantidad_enviada < cantidad_requerida:
+                return False, f"Lote {lote_id} tiene cantidad insuficiente. Tiene: {cantidad_enviada}, Requiere: {cantidad_requerida}"
+            
+            return True, None
+        except Exception as e:
+            return False, f"Error verificando lote: {str(e)}"
+    
+    def guardar_hormigas_en_lote(self, lote_id: str, hormigas: List[Hormiga]) -> bool:
+        """
+        Guarda las hormigas asignadas en un lote.
+        
+        Args:
+            lote_id: ID del lote
+            hormigas: Lista de hormigas a guardar
+            
+        Returns:
+            True si se guardaron exitosamente
+        """
+        try:
+            cursor = self.connection.cursor()
+            # Obtener tarea_id del lote
+            cursor.execute("SELECT tarea_id FROM lotes_hormigas WHERE lote_id = ?", (lote_id,))
+            row = cursor.fetchone()
+            if not row:
+                self.last_error = f"Lote {lote_id} no encontrado"
+                return False
+            
+            tarea_id = row[0]
+            
+            # Guardar cada hormiga en asignaciones con el lote_id
+            for hormiga in hormigas:
+                # Guardar hormiga si no existe
+                cursor.execute("""
+                    INSERT OR IGNORE INTO hormigas 
+                    (id, capacidad_carga, estado, tiempo_vida, subsistema_origen)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (
+                    hormiga.id,
+                    hormiga.capacidad_carga,
+                    hormiga.estado.value if hasattr(hormiga.estado, 'value') else str(hormiga.estado),
+                    hormiga.tiempo_vida,
+                    hormiga.subsistema_origen
+                ))
+                
+                # Guardar asignación con lote_id
+                cursor.execute("""
+                    INSERT OR REPLACE INTO asignaciones_hormiga_tarea 
+                    (tarea_id, hormiga_id, lote_id)
+                    VALUES (?, ?, ?)
+                """, (tarea_id, hormiga.id, lote_id))
+            
+            self.connection.commit()
+            return True
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Error guardando hormigas en lote: {e}")
+            return False
+    
+    def obtener_hormigas_por_lote(self, lote_id: str) -> List[Hormiga]:
+        """
+        Obtiene las hormigas asignadas a un lote.
+        
+        Args:
+            lote_id: ID del lote
+            
+        Returns:
+            Lista de hormigas
+        """
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT h.* FROM hormigas h
+                JOIN asignaciones_hormiga_tarea aht ON h.id = aht.hormiga_id
+                WHERE aht.lote_id = ?
+            """, (lote_id,))
+            rows = cursor.fetchall()
+            
+            hormigas = []
+            for row in rows:
+                hormigas.append(Hormiga(
+                    id=row['id'],
+                    capacidad_carga=row['capacidad_carga'],
+                    estado=EstadoHormiga(row['estado']),
+                    tiempo_vida=row['tiempo_vida'],
+                    subsistema_origen=row['subsistema_origen']
+                ))
+            return hormigas
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Error obteniendo hormigas por lote: {e}")
             return []
 
     def obtener_estadisticas(self) -> Dict[str, Any]:
@@ -820,13 +1076,30 @@ class SqlServerDatabaseManager:
                     alimento_recolectado=cantidad_recolectada
                 )
                 
-                # Hormigas asignadas (si la tabla existe)
+                # Obtener lote_id de la tarea
                 try:
                     self._exec(cursor, """
-                        SELECT h.* FROM dbo.hormigas h
-                        JOIN dbo.asignaciones_hormiga_tarea aht ON h.id = aht.hormiga_id
-                        WHERE aht.tarea_id = ?
+                        SELECT TOP 1 lote_id FROM dbo.lotes_hormigas WHERE tarea_id = ?
                     """, (tarea.id,))
+                    lote_row = cursor.fetchone()
+                    
+                    if lote_row:
+                        lote_id = lote_row[0]
+                        tarea.hormigas_lote_id = lote_id
+                        # Obtener hormigas desde el lote
+                        self._exec(cursor, """
+                            SELECT h.* FROM dbo.hormigas h
+                            JOIN dbo.asignaciones_hormiga_tarea aht ON h.id = aht.hormiga_id
+                            WHERE aht.lote_id = ?
+                        """, (lote_id,))
+                    else:
+                        # Fallback: obtener hormigas directamente por tarea_id
+                        self._exec(cursor, """
+                            SELECT h.* FROM dbo.hormigas h
+                            JOIN dbo.asignaciones_hormiga_tarea aht ON h.id = aht.hormiga_id
+                            WHERE aht.tarea_id = ? AND (aht.lote_id IS NULL OR aht.lote_id = '')
+                        """, (tarea.id,))
+                    
                     hrows = self._fetchall_dicts(cursor)
                     for hrow in hrows:
                         tarea.agregar_hormiga(Hormiga(
@@ -973,6 +1246,160 @@ class SqlServerDatabaseManager:
         except Exception as e:
             self.last_error = str(e)
             print(f"Error obteniendo mensajes (SQL Server): {e}")
+            return []
+
+    def crear_lote_hormigas(
+        self, 
+        lote_id: str, 
+        tarea_id: str, 
+        cantidad_enviada: int, 
+        cantidad_requerida: int
+    ) -> bool:
+        """Crea un lote de hormigas con validación de cantidad (SQL Server)."""
+        try:
+            if cantidad_enviada < cantidad_requerida:
+                self.last_error = f"Cantidad insuficiente de hormigas. Enviadas: {cantidad_enviada}, Requeridas: {cantidad_requerida}"
+                return False
+            
+            cursor = self.connection.cursor()
+            self._exec(cursor, """
+                IF NOT EXISTS (SELECT 1 FROM dbo.lotes_hormigas WHERE lote_id = ?)
+                INSERT INTO dbo.lotes_hormigas 
+                (lote_id, tarea_id, cantidad_hormigas_enviadas, cantidad_hormigas_requeridas, estado)
+                VALUES (?, ?, ?, ?, 'pendiente')
+            """, (lote_id, lote_id, tarea_id, cantidad_enviada, cantidad_requerida))
+            return True
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Error creando lote de hormigas (SQL Server): {e}")
+            return False
+    
+    def aceptar_lote_hormigas(self, lote_id: str) -> bool:
+        """Acepta un lote de hormigas (SQL Server)."""
+        try:
+            cursor = self.connection.cursor()
+            self._exec(cursor, """
+                SELECT estado FROM dbo.lotes_hormigas WHERE lote_id = ?
+            """, (lote_id,))
+            row = cursor.fetchone()
+            
+            if not row:
+                self.last_error = f"Lote {lote_id} no encontrado"
+                return False
+            
+            if row[0] == 'en_uso':
+                self.last_error = f"Lote {lote_id} ya está en uso"
+                return False
+            
+            self._exec(cursor, """
+                UPDATE dbo.lotes_hormigas 
+                SET estado = 'aceptado', fecha_aceptacion = GETDATE()
+                WHERE lote_id = ?
+            """, (lote_id,))
+            return cursor.rowcount > 0
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Error aceptando lote (SQL Server): {e}")
+            return False
+    
+    def marcar_lote_en_uso(self, lote_id: str) -> bool:
+        """Marca un lote como en uso (SQL Server)."""
+        try:
+            cursor = self.connection.cursor()
+            self._exec(cursor, """
+                UPDATE dbo.lotes_hormigas 
+                SET estado = 'en_uso'
+                WHERE lote_id = ?
+            """, (lote_id,))
+            return cursor.rowcount > 0
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Error marcando lote en uso (SQL Server): {e}")
+            return False
+    
+    def verificar_lote_disponible(self, lote_id: str, cantidad_requerida: int) -> tuple[bool, Optional[str]]:
+        """Verifica que un lote esté disponible (SQL Server)."""
+        try:
+            cursor = self.connection.cursor()
+            self._exec(cursor, """
+                SELECT estado, cantidad_hormigas_enviadas 
+                FROM dbo.lotes_hormigas 
+                WHERE lote_id = ?
+            """, (lote_id,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return False, f"Lote {lote_id} no encontrado"
+            
+            estado, cantidad_enviada = row[0], row[1]
+            
+            if estado == 'en_uso':
+                return False, f"Lote {lote_id} ya está en uso"
+            
+            if cantidad_enviada < cantidad_requerida:
+                return False, f"Lote {lote_id} tiene cantidad insuficiente. Tiene: {cantidad_enviada}, Requiere: {cantidad_requerida}"
+            
+            return True, None
+        except Exception as e:
+            return False, f"Error verificando lote: {str(e)}"
+    
+    def guardar_hormigas_en_lote(self, lote_id: str, hormigas: List[Hormiga]) -> bool:
+        """Guarda las hormigas en un lote (SQL Server)."""
+        try:
+            cursor = self.connection.cursor()
+            self._exec(cursor, "SELECT tarea_id FROM dbo.lotes_hormigas WHERE lote_id = ?", (lote_id,))
+            row = cursor.fetchone()
+            if not row:
+                self.last_error = f"Lote {lote_id} no encontrado"
+                return False
+            
+            tarea_id = row[0]
+            
+            for hormiga in hormigas:
+                self._exec(cursor, """
+                    IF NOT EXISTS (SELECT 1 FROM dbo.hormigas WHERE id = ?)
+                    INSERT INTO dbo.hormigas (id, capacidad_carga, estado, tiempo_vida, subsistema_origen)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (hormiga.id, hormiga.id, hormiga.capacidad_carga, 
+                      hormiga.estado.value if hasattr(hormiga.estado, 'value') else str(hormiga.estado),
+                      hormiga.tiempo_vida, hormiga.subsistema_origen))
+                
+                self._exec(cursor, """
+                    IF NOT EXISTS (SELECT 1 FROM dbo.asignaciones_hormiga_tarea WHERE tarea_id = ? AND hormiga_id = ?)
+                    INSERT INTO dbo.asignaciones_hormiga_tarea (tarea_id, hormiga_id, lote_id)
+                    VALUES (?, ?, ?)
+                """, (tarea_id, hormiga.id, tarea_id, hormiga.id, lote_id))
+            
+            return True
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Error guardando hormigas en lote (SQL Server): {e}")
+            return False
+    
+    def obtener_hormigas_por_lote(self, lote_id: str) -> List[Hormiga]:
+        """Obtiene las hormigas de un lote (SQL Server)."""
+        try:
+            cursor = self.connection.cursor()
+            self._exec(cursor, """
+                SELECT h.* FROM dbo.hormigas h
+                JOIN dbo.asignaciones_hormiga_tarea aht ON h.id = aht.hormiga_id
+                WHERE aht.lote_id = ?
+            """, (lote_id,))
+            rows = self._fetchall_dicts(cursor)
+            
+            hormigas = []
+            for row in rows:
+                hormigas.append(Hormiga(
+                    id=str(row.get('id', '')),
+                    capacidad_carga=int(row.get('capacidad_carga', 5)),
+                    estado=EstadoHormiga(row.get('estado', 'disponible')),
+                    tiempo_vida=int(row.get('tiempo_vida', 3600)),
+                    subsistema_origen=row.get('subsistema_origen')
+                ))
+            return hormigas
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Error obteniendo hormigas por lote (SQL Server): {e}")
             return []
 
     def obtener_estadisticas(self) -> Dict[str, Any]:

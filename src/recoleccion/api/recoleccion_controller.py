@@ -386,25 +386,35 @@ def create_app(
                 if not hormigas:
                     raise HTTPException(status_code=400, detail="No se pudieron obtener hormigas del servicio de comunicación")
                 
-                # Asignar hormigas a la tarea (esto ya persiste en BD)
-                await recoleccion_service.asignar_hormigas_a_tarea(tarea, hormigas)
+                # Asignar hormigas a la tarea usando lotes (esto valida cantidad y crea el lote)
+                exito, error_msg = await recoleccion_service.asignar_hormigas_a_tarea(
+                    tarea, hormigas, lote_id=hormigas_lote_id
+                )
+                
+                if not exito:
+                    raise HTTPException(status_code=400, detail=error_msg or "Error al asignar hormigas")
                 
                 # Si se proporcionó lote_id y ahora tiene suficientes hormigas, iniciar automáticamente
                 iniciada = False
                 if hormigas_lote_id and tarea.tiene_suficientes_hormigas():
-                    tarea.hormigas_lote_id = hormigas_lote_id
-                    await recoleccion_service.iniciar_tarea_recoleccion(tarea, hormigas_lote_id)
-                    iniciada = True
+                    try:
+                        await recoleccion_service.iniciar_tarea_recoleccion(tarea, hormigas_lote_id)
+                        iniciada = True
+                    except ValueError as e:
+                        # Si falla el inicio, el lote ya está creado y aceptado, pero no se inició
+                        pass
                 
                 return {
                     "message": f"Se asignaron {len(hormigas)} hormigas a la tarea {tarea_id}" + (" y se inició automáticamente" if iniciada else ""),
                     "tarea_id": tarea.id,
                     "hormigas_asignadas": len(tarea.hormigas_asignadas),
                     "hormigas_requeridas": tarea.alimento.cantidad_hormigas_necesarias,
-                    "hormigas_lote_id": hormigas_lote_id if iniciada else None,
+                    "hormigas_lote_id": tarea.hormigas_lote_id or hormigas_lote_id,
                     "estado": tarea.estado.value if hasattr(tarea.estado, 'value') else str(tarea.estado),
                     "iniciada": iniciada
                 }
+            except HTTPException:
+                raise
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Error al solicitar hormigas: {str(e)}")
                 

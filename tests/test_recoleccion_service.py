@@ -280,3 +280,137 @@ class TestRecoleccionService:
         mock_comunicacion_service.solicitar_hormigas.assert_called_once()
         mock_comunicacion_service.devolver_hormigas.assert_called_once()
         mock_entorno_service.marcar_alimento_como_recolectado.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('src.recoleccion.services.recoleccion_service.timer_service')
+    async def test_iniciar_tarea_con_hormigas_lote_id(
+        self, mock_timer_service, recoleccion_service, alimento_ejemplo, hormiga_ejemplo
+    ):
+        """Prueba el inicio de una tarea con hormigas_lote_id."""
+        # Configurar mock del timer service para que inicie la tarea
+        async def mock_iniciar_tarea_timer(tarea):
+            tarea.iniciar_tarea()
+            return True
+        mock_timer_service.iniciar_tarea_timer = AsyncMock(side_effect=mock_iniciar_tarea_timer)
+        
+        # Arrange
+        tarea = await recoleccion_service.crear_tarea_recoleccion(
+            "tarea_001", alimento_ejemplo
+        )
+        await recoleccion_service.asignar_hormigas_a_tarea(tarea, [hormiga_ejemplo] * 3)
+        lote_id = "LOTE_001"
+        
+        # Act
+        await recoleccion_service.iniciar_tarea_recoleccion(tarea, hormigas_lote_id=lote_id)
+        
+        # Assert
+        assert tarea.estado == EstadoTarea.EN_PROCESO
+        assert tarea.fecha_inicio is not None
+        assert tarea.hormigas_lote_id == lote_id
+
+    @pytest.mark.asyncio
+    @patch('src.recoleccion.services.recoleccion_service.timer_service')
+    async def test_verificar_y_completar_tarea_por_tiempo_exitoso(
+        self, mock_timer_service, recoleccion_service, alimento_ejemplo, hormiga_ejemplo
+    ):
+        """Prueba el completado automático de una tarea por tiempo transcurrido."""
+        from datetime import datetime, timedelta
+        
+        # Configurar mock del timer service para que inicie la tarea
+        async def mock_iniciar_tarea_timer(tarea):
+            tarea.iniciar_tarea()
+            return True
+        mock_timer_service.iniciar_tarea_timer = AsyncMock(side_effect=mock_iniciar_tarea_timer)
+        
+        # Arrange
+        tarea = await recoleccion_service.crear_tarea_recoleccion(
+            "tarea_001", alimento_ejemplo
+        )
+        await recoleccion_service.asignar_hormigas_a_tarea(tarea, [hormiga_ejemplo] * 3)
+        await recoleccion_service.iniciar_tarea_recoleccion(tarea, hormigas_lote_id="LOTE_001")
+        
+        # Simular que ha pasado el tiempo de recolección
+        tarea.fecha_inicio = datetime.now() - timedelta(seconds=alimento_ejemplo.tiempo_recoleccion + 10)
+        
+        # Act
+        completada = await recoleccion_service.verificar_y_completar_tarea_por_tiempo(tarea)
+        
+        # Assert
+        assert completada is True
+        assert tarea.estado == EstadoTarea.COMPLETADA
+        assert tarea.fecha_fin is not None
+        assert tarea.alimento.disponible is False
+        # Verificar que fecha_fin es fecha_inicio + tiempo_recoleccion
+        fecha_fin_esperada = tarea.fecha_inicio + timedelta(seconds=alimento_ejemplo.tiempo_recoleccion)
+        assert abs((tarea.fecha_fin - fecha_fin_esperada).total_seconds()) < 1  # Tolerancia de 1 segundo
+
+    @pytest.mark.asyncio
+    @patch('src.recoleccion.services.recoleccion_service.timer_service')
+    async def test_verificar_y_completar_tarea_por_tiempo_no_completada(
+        self, mock_timer_service, recoleccion_service, alimento_ejemplo, hormiga_ejemplo
+    ):
+        """Prueba que una tarea no se completa si no ha pasado el tiempo suficiente."""
+        from datetime import datetime, timedelta
+        
+        # Configurar mock del timer service para que inicie la tarea
+        async def mock_iniciar_tarea_timer(tarea):
+            tarea.iniciar_tarea()
+            return True
+        mock_timer_service.iniciar_tarea_timer = AsyncMock(side_effect=mock_iniciar_tarea_timer)
+        
+        # Arrange
+        tarea = await recoleccion_service.crear_tarea_recoleccion(
+            "tarea_001", alimento_ejemplo
+        )
+        await recoleccion_service.asignar_hormigas_a_tarea(tarea, [hormiga_ejemplo] * 3)
+        await recoleccion_service.iniciar_tarea_recoleccion(tarea, hormigas_lote_id="LOTE_001")
+        
+        # Simular que solo ha pasado la mitad del tiempo
+        tarea.fecha_inicio = datetime.now() - timedelta(seconds=alimento_ejemplo.tiempo_recoleccion / 2)
+        
+        # Act
+        completada = await recoleccion_service.verificar_y_completar_tarea_por_tiempo(tarea)
+        
+        # Assert
+        assert completada is False
+        assert tarea.estado == EstadoTarea.EN_PROCESO
+        assert tarea.fecha_fin is None
+
+    @pytest.mark.asyncio
+    async def test_verificar_y_completar_tarea_por_tiempo_tarea_pendiente(
+        self, recoleccion_service, alimento_ejemplo
+    ):
+        """Prueba que una tarea pendiente no se completa automáticamente."""
+        # Arrange
+        tarea = await recoleccion_service.crear_tarea_recoleccion(
+            "tarea_001", alimento_ejemplo
+        )
+        # Tarea en estado PENDIENTE, sin fecha_inicio
+        
+        # Act
+        completada = await recoleccion_service.verificar_y_completar_tarea_por_tiempo(tarea)
+        
+        # Assert
+        assert completada is False
+        assert tarea.estado == EstadoTarea.PENDIENTE
+
+    @pytest.mark.asyncio
+    async def test_crear_tarea_con_alimento_no_disponible_debe_fallar(
+        self, recoleccion_service
+    ):
+        """Prueba que no se puede crear una tarea con un alimento no disponible."""
+        # Arrange
+        alimento_no_disponible = Alimento(
+            id="alimento_002",
+            nombre="Fruta Agotada",
+            cantidad_hormigas_necesarias=3,
+            puntos_stock=10,
+            tiempo_recoleccion=300,
+            disponible=False
+        )
+        
+        # Act & Assert
+        with pytest.raises(ValueError, match="no está disponible"):
+            await recoleccion_service.crear_tarea_recoleccion(
+                "tarea_001", alimento_no_disponible
+            )

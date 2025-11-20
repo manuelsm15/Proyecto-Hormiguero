@@ -154,24 +154,76 @@ class RecoleccionService:
         hormigas = await self.comunicacion_service.consultar_respuesta_hormigas(mensaje_id)
         return hormigas
     
-    async def asignar_hormigas_a_tarea(self, tarea: TareaRecoleccion, hormigas: List[Hormiga]) -> None:
+    async def asignar_hormigas_a_tarea(
+        self, 
+        tarea: TareaRecoleccion, 
+        hormigas: List[Hormiga], 
+        lote_id: Optional[str] = None
+    ) -> tuple[bool, Optional[str]]:
         """
-        Asigna hormigas a una tarea de recolección.
+        Asigna hormigas a una tarea de recolección usando lotes.
         
         Args:
             tarea: Tarea a la que asignar las hormigas
             hormigas: Lista de hormigas a asignar
+            lote_id: ID del lote (opcional, se genera si no se proporciona)
+            
+        Returns:
+            Tupla (exitoso, mensaje_error)
         """
+        from ..services.persistence_service import persistence_service
+        
+        cantidad_enviada = len(hormigas)
+        cantidad_requerida = tarea.alimento.cantidad_hormigas_necesarias
+        
+        # Validar cantidad antes de crear el lote
+        if cantidad_enviada < cantidad_requerida:
+            error_msg = f"El lote tiene cantidad insuficiente de hormigas. Enviadas: {cantidad_enviada}, Requeridas: {cantidad_requerida}"
+            return False, error_msg
+        
+        # Generar lote_id si no se proporciona
+        if not lote_id:
+            from datetime import datetime
+            lote_id = f"LOTE_{datetime.now().strftime('%Y%m%d%H%M%S')}_{tarea.id}"
+        
+        # Verificar que el lote no esté en uso
+        es_valido, error_msg = await persistence_service.verificar_lote_disponible(lote_id, cantidad_requerida)
+        if not es_valido and error_msg and "no encontrado" not in error_msg:
+            # Si el lote existe pero está en uso o tiene problemas, retornar error
+            return False, error_msg
+        
+        # Crear el lote en la base de datos
+        exito, error = await persistence_service.crear_lote_hormigas(
+            lote_id, tarea.id, cantidad_enviada, cantidad_requerida
+        )
+        if not exito:
+            return False, error or "Error desconocido al crear lote"
+        
+        # Aceptar el lote
+        exito, error = await persistence_service.aceptar_lote_hormigas(lote_id)
+        if not exito:
+            return False, error or "Error desconocido al aceptar lote"
+        
+        # Asignar hormigas a la tarea en memoria
         for hormiga in hormigas:
             tarea.agregar_hormiga(hormiga)
             hormiga.cambiar_estado(EstadoHormiga.DISPONIBLE)
         
-        # Persistir tarea con hormigas asignadas en BD
+        # Guardar hormigas en el lote en la base de datos
+        exito = await persistence_service.guardar_hormigas_en_lote(lote_id, hormigas)
+        if not exito:
+            return False, "Error al guardar hormigas en el lote"
+        
+        # Asignar lote_id a la tarea
+        tarea.hormigas_lote_id = lote_id
+        
+        # Persistir tarea (sin hormigas_asignadas, se obtienen del lote)
         try:
-            from ..services.persistence_service import persistence_service
             await persistence_service.guardar_tarea(tarea)
         except Exception as e:
-            print(f"Advertencia: No se pudo persistir tarea con hormigas asignadas en BD: {e}")
+            print(f"Advertencia: No se pudo persistir tarea: {e}")
+        
+        return True, None
     
     async def iniciar_tarea_recoleccion(self, tarea: TareaRecoleccion, hormigas_lote_id: Optional[str] = None) -> None:
         """
@@ -184,12 +236,26 @@ class RecoleccionService:
         Raises:
             ValueError: Si la tarea no puede ser iniciada
         """
+        from ..services.persistence_service import persistence_service
+        
         if not tarea.tiene_suficientes_hormigas():
             raise ValueError("No se puede iniciar la tarea sin suficientes hormigas")
         
         # Si se proporciona un lote ID, guardarlo en la tarea
         if hormigas_lote_id is not None:
             tarea.hormigas_lote_id = hormigas_lote_id
+        
+        # Si hay un lote_id, validar que esté disponible y marcar como en uso
+        if tarea.hormigas_lote_id:
+            es_valido, error_msg = await persistence_service.verificar_lote_disponible(
+                tarea.hormigas_lote_id, 
+                tarea.alimento.cantidad_hormigas_necesarias
+            )
+            if not es_valido:
+                raise ValueError(error_msg or "El lote de hormigas no está disponible")
+            
+            # Marcar el lote como en uso
+            await persistence_service.marcar_lote_en_uso(tarea.hormigas_lote_id)
         
         # Usar timer service para manejo en tiempo real
         try:
@@ -206,7 +272,6 @@ class RecoleccionService:
         
         # Actualizar persistencia
         try:
-            from ..services.persistence_service import persistence_service
             await persistence_service.guardar_tarea(tarea)
             await persistence_service.actualizar_estado_tarea(tarea.id, tarea.estado)
         except Exception as e:

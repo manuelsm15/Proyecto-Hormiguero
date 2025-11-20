@@ -207,6 +207,94 @@ class PersistenceService:
         """Registra un evento en la base de datos."""
         self.db.guardar_evento(tipo_evento, descripcion, datos_adicionales)
     
+    async def crear_lote_hormigas(
+        self, 
+        lote_id: str, 
+        tarea_id: str, 
+        cantidad_enviada: int, 
+        cantidad_requerida: int
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Crea un lote de hormigas con validación de cantidad.
+        
+        Returns:
+            Tupla (exitoso, mensaje_error)
+        """
+        try:
+            success = self.db.crear_lote_hormigas(lote_id, tarea_id, cantidad_enviada, cantidad_requerida)
+            if success:
+                await self._registrar_evento(
+                    "lote_creado",
+                    f"Lote {lote_id} creado para tarea {tarea_id}",
+                    {
+                        "lote_id": lote_id,
+                        "tarea_id": tarea_id,
+                        "cantidad_enviada": cantidad_enviada,
+                        "cantidad_requerida": cantidad_requerida
+                    }
+                )
+                return True, None
+            else:
+                error_msg = self.db.last_error or "Error desconocido al crear lote"
+                return False, error_msg
+        except Exception as e:
+            return False, str(e)
+    
+    async def aceptar_lote_hormigas(self, lote_id: str) -> tuple[bool, Optional[str]]:
+        """Acepta un lote de hormigas."""
+        try:
+            success = self.db.aceptar_lote_hormigas(lote_id)
+            if success:
+                await self._registrar_evento(
+                    "lote_aceptado",
+                    f"Lote {lote_id} aceptado",
+                    {"lote_id": lote_id}
+                )
+                return True, None
+            else:
+                error_msg = self.db.last_error or "Error desconocido al aceptar lote"
+                return False, error_msg
+        except Exception as e:
+            return False, str(e)
+    
+    async def marcar_lote_en_uso(self, lote_id: str) -> bool:
+        """Marca un lote como en uso."""
+        try:
+            success = self.db.marcar_lote_en_uso(lote_id)
+            if success:
+                await self._registrar_evento(
+                    "lote_en_uso",
+                    f"Lote {lote_id} marcado como en uso",
+                    {"lote_id": lote_id}
+                )
+            return success
+        except Exception as e:
+            print(f"Error marcando lote en uso: {e}")
+            return False
+    
+    async def verificar_lote_disponible(self, lote_id: str, cantidad_requerida: int) -> tuple[bool, Optional[str]]:
+        """Verifica que un lote esté disponible y tenga cantidad suficiente."""
+        return self.db.verificar_lote_disponible(lote_id, cantidad_requerida)
+    
+    async def guardar_hormigas_en_lote(self, lote_id: str, hormigas: List[Hormiga]) -> bool:
+        """Guarda las hormigas asignadas en un lote."""
+        try:
+            success = self.db.guardar_hormigas_en_lote(lote_id, hormigas)
+            if success:
+                await self._registrar_evento(
+                    "hormigas_guardadas_en_lote",
+                    f"{len(hormigas)} hormigas guardadas en lote {lote_id}",
+                    {"lote_id": lote_id, "cantidad_hormigas": len(hormigas)}
+                )
+            return success
+        except Exception as e:
+            print(f"Error guardando hormigas en lote: {e}")
+            return False
+    
+    async def obtener_hormigas_por_lote(self, lote_id: str) -> List[Hormiga]:
+        """Obtiene las hormigas asignadas a un lote."""
+        return self.db.obtener_hormigas_por_lote(lote_id)
+
     def cerrar(self):
         """Cierra la conexión a la base de datos."""
         self.db.cerrar()

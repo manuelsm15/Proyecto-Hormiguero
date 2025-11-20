@@ -43,9 +43,52 @@ def main():
             return 1
             
     except FileNotFoundError:
-        print("ERROR: Allure no esta instalado")
-        print("Instala Allure con: pip install allure-pytest")
-        return 1
+        print("ADVERTENCIA: Allure CLI no está instalado")
+        print("")
+        print("Generando reporte HTML alternativo...")
+        print("")
+        
+        # Intentar usar el generador HTML alternativo
+        try:
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, str(Path(__file__).parent / "generate_html_report.py")],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=project_root
+            )
+            
+            if result.returncode == 0:
+                print("[OK] Reporte HTML generado exitosamente")
+                print("Ubicacion: test-report.html")
+                print("\nPara abrir el reporte:")
+                print("  - Abre el archivo: test-report.html")
+                print("  - O ejecuta: start test-report.html (Windows)")
+            else:
+                print("[ERROR] No se pudo generar el reporte HTML")
+                if result.stderr:
+                    print(f"Error: {result.stderr[:200]}")
+                print("\nLos resultados estan guardados en: allure-results/")
+                print("Puedes leer los archivos JSON directamente o instalar Allure CLI:")
+                print("")
+                print("Windows (con Chocolatey):")
+                print("  choco install allure-commandline")
+                print("")
+                print("O descargar desde:")
+                print("  https://github.com/allure-framework/allure2/releases")
+        except Exception as e:
+            print(f"[ERROR] Error al generar reporte HTML: {e}")
+            print("\nLos resultados están guardados en: allure-results/")
+            print("Puedes leer los archivos JSON directamente o instalar Allure CLI:")
+            print("")
+            print("Windows (con Chocolatey):")
+            print("  choco install allure-commandline")
+            print("")
+            print("O descargar desde:")
+            print("  https://github.com/allure-framework/allure2/releases")
+        
+        return 0
     
     return 0
 

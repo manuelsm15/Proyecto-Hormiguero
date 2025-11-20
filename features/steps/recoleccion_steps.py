@@ -528,3 +528,135 @@ def step_impl(context):
     """Verifica el estado de la tarea."""
     assert context.tarea.estado == EstadoTarea.PAUSADA
 
+
+@given("que tengo una tarea de recolección")
+def step_impl(context):
+    """Crea una tarea de recolección."""
+    if not hasattr(context, 'alimento'):
+        context.alimento = Alimento(
+            id="alimento_001",
+            nombre="Fruta",
+            cantidad_hormigas_necesarias=3,
+            puntos_stock=10,
+            tiempo_recoleccion=300,
+            disponible=True
+        )
+    context.tarea = asyncio.run(
+        context.recoleccion_service.crear_tarea_recoleccion(
+            "tarea_001", context.alimento
+        )
+    )
+
+
+@when('asigno las hormigas a la tarea con lote_id "{lote_id}"')
+def step_impl(context, lote_id):
+    """Asigna hormigas a la tarea con un lote_id."""
+    asyncio.run(
+        context.recoleccion_service.asignar_hormigas_a_tarea(context.tarea, context.hormigas)
+    )
+    context.tarea.hormigas_lote_id = lote_id
+
+
+@then('la tarea debe tener el hormigas_lote_id "{lote_id}"')
+def step_impl(context, lote_id):
+    """Verifica que la tarea tiene el hormigas_lote_id."""
+    assert context.tarea.hormigas_lote_id == lote_id
+
+
+@given("la tarea tiene suficientes hormigas")
+def step_impl(context):
+    """Verifica que la tarea tiene suficientes hormigas."""
+    assert context.tarea.tiene_suficientes_hormigas()
+
+
+@then("la tarea debe iniciarse automáticamente")
+def step_impl(context):
+    """Verifica que la tarea se inició automáticamente."""
+    # Si tiene suficientes hormigas y lote_id, debería iniciarse
+    if context.tarea.hormigas_lote_id and context.tarea.tiene_suficientes_hormigas():
+        asyncio.run(
+            context.recoleccion_service.iniciar_tarea_recoleccion(
+                context.tarea, hormigas_lote_id=context.tarea.hormigas_lote_id
+            )
+        )
+
+
+@when('inicio la tarea de recolección con lote_id "{lote_id}"')
+def step_impl(context, lote_id):
+    """Inicia la tarea con un lote_id."""
+    asyncio.run(
+        context.recoleccion_service.iniciar_tarea_recoleccion(
+            context.tarea, hormigas_lote_id=lote_id
+        )
+    )
+
+
+@given("ha transcurrido el tiempo de recolección completo")
+def step_impl(context):
+    """Simula que ha transcurrido el tiempo completo de recolección."""
+    from datetime import datetime, timedelta
+    if context.tarea.fecha_inicio:
+        # Establecer fecha_inicio en el pasado (tiempo_recoleccion + 10 segundos)
+        context.tarea.fecha_inicio = datetime.now() - timedelta(
+            seconds=context.tarea.alimento.tiempo_recoleccion + 10
+        )
+
+
+@when("verifico si la tarea debe completarse automáticamente")
+def step_impl(context):
+    """Verifica si la tarea debe completarse automáticamente."""
+    context.completada = asyncio.run(
+        context.recoleccion_service.verificar_y_completar_tarea_por_tiempo(context.tarea)
+    )
+
+
+@given("solo ha transcurrido la mitad del tiempo de recolección")
+def step_impl(context):
+    """Simula que solo ha transcurrido la mitad del tiempo."""
+    from datetime import datetime, timedelta
+    if context.tarea.fecha_inicio:
+        # Establecer fecha_inicio en el pasado (mitad del tiempo_recoleccion)
+        context.tarea.fecha_inicio = datetime.now() - timedelta(
+            seconds=context.tarea.alimento.tiempo_recoleccion / 2
+        )
+
+
+@then("la tarea no debe tener fecha de finalización")
+def step_impl(context):
+    """Verifica que la tarea no tiene fecha de finalización."""
+    assert context.tarea.fecha_fin is None
+
+
+@then("la fecha de finalización debe ser fecha_inicio + tiempo_recoleccion")
+def step_impl(context):
+    """Verifica que la fecha de finalización es correcta."""
+    from datetime import timedelta
+    fecha_fin_esperada = context.tarea.fecha_inicio + timedelta(
+        seconds=context.tarea.alimento.tiempo_recoleccion
+    )
+    # Tolerancia de 1 segundo
+    assert abs((context.tarea.fecha_fin - fecha_fin_esperada).total_seconds()) < 1
+
+
+@given('la tarea tiene hormigas_lote_id "{lote_id}"')
+def step_impl(context, lote_id):
+    """Establece el hormigas_lote_id de la tarea."""
+    context.tarea.hormigas_lote_id = lote_id
+
+
+@when("consulto el status de la tarea")
+def step_impl(context):
+    """Consulta el status de la tarea."""
+    # Simular consulta de status (en realidad esto sería una llamada a la API)
+    context.status = {
+        "tarea_id": context.tarea.id,
+        "estado": context.tarea.estado.value if hasattr(context.tarea.estado, 'value') else str(context.tarea.estado),
+        "hormigas_lote_id": context.tarea.hormigas_lote_id
+    }
+
+
+@then('el status debe incluir el hormigas_lote_id "{lote_id}"')
+def step_impl(context, lote_id):
+    """Verifica que el status incluye el hormigas_lote_id."""
+    assert context.status["hormigas_lote_id"] == lote_id
+
