@@ -1,0 +1,1631 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Subsistema de Recolección de Alimentos",
+    "description": "\n        ## API para la gestión de recolección de alimentos en la simulación de colonia de hormigas\n        \n        ### Características principales:\n        - Gestión de alimentos disponibles\n        - Creación y asignación de tareas de recolección\n        - Asignación de hormigas por lotes\n        - Completado automático de tareas por tiempo\n        - Monitoreo en tiempo real del estado de tareas\n        - Integración con base de datos SQL Server/SQLite\n        \n        ### Documentación Interactiva:\n        - **Swagger UI**: `/docs` - Interfaz interactiva para probar las APIs\n        - **ReDoc**: `/redoc` - Documentación alternativa en formato ReDoc\n        - **OpenAPI Schema**: `/openapi.json` - Esquema OpenAPI en formato JSON\n        \n        ### Base URL:\n        - **Local**: `http://localhost:8000`\n        - **Producción**: Configurar según el entorno de despliegue\n        ",
+    "contact": {
+      "name": "Subsistema de Recolección",
+      "email": "manuelsm15@gmail.com"
+    },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "Salud y Estado"
+        ],
+        "summary": "Root",
+        "description": "Endpoint raíz.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Salud y Estado"
+        ],
+        "summary": "Health Check",
+        "description": "Verificación de salud del servicio.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alimentos": {
+      "get": {
+        "tags": [
+          "Alimentos"
+        ],
+        "summary": "Consultar Alimentos",
+        "description": "Consulta los alimentos/recursos disponibles en el entorno.\n\nPuede filtrar por:\n- zona_id: ID de la zona donde se encuentran los recursos\n- estado: Estado del recurso (disponible, en_proceso, recolectado)\n\nSi no se especifica estado, por defecto solo devuelve recursos disponibles.",
+        "operationId": "consultar_alimentos_alimentos_get",
+        "parameters": [
+          {
+            "name": "zona_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ID de zona para filtrar recursos",
+              "title": "Zona Id"
+            },
+            "description": "ID de zona para filtrar recursos"
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Estado del recurso: disponible, en_proceso, recolectado",
+              "title": "Estado"
+            },
+            "description": "Estado del recurso: disponible, en_proceso, recolectado"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Alimento"
+                  },
+                  "title": "Response Consultar Alimentos Alimentos Get"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Alimentos"
+        ],
+        "summary": "Crear Alimento",
+        "description": "Crea un alimento y lo guarda en la base de datos.",
+        "operationId": "crear_alimento_alimentos_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearAlimentoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alimento"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas": {
+      "post": {
+        "tags": [
+          "Tareas"
+        ],
+        "summary": "Crear Tarea",
+        "description": "Crea una nueva tarea de recolección.",
+        "operationId": "crear_tarea_tareas_post",
+        "parameters": [
+          {
+            "name": "tarea_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Tarea Id"
+            }
+          },
+          {
+            "name": "alimento_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Alimento Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CrearTareaRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TareaRecoleccion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error de validación o regla de negocio",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "El alimento no está disponible. Estado: agotado"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Tarea 'T1001' no encontrada en la base de datos"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Tareas"
+        ],
+        "summary": "Listar Tareas",
+        "description": "Lista todas las tareas (activas + completadas).",
+        "operationId": "listar_tareas_tareas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TareaRecoleccion"
+                  },
+                  "title": "Response Listar Tareas Tareas Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/activas": {
+      "get": {
+        "tags": [
+          "Tareas"
+        ],
+        "summary": "Listar Tareas Activas",
+        "description": "Lista todas las tareas activas.",
+        "operationId": "listar_tareas_activas_tareas_activas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TareaRecoleccion"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Tareas Activas Tareas Activas Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/completadas": {
+      "get": {
+        "tags": [
+          "Tareas"
+        ],
+        "summary": "Listar Tareas Completadas",
+        "description": "Lista todas las tareas completadas.",
+        "operationId": "listar_tareas_completadas_tareas_completadas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TareaRecoleccion"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Tareas Completadas Tareas Completadas Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/en-proceso": {
+      "get": {
+        "tags": [
+          "Tareas"
+        ],
+        "summary": "Listar Tareas En Proceso",
+        "description": "Lista todas las tareas en proceso.",
+        "operationId": "listar_tareas_en_proceso_tareas_en_proceso_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TareaRecoleccion"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Tareas En Proceso Tareas En Proceso Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/{tarea_id}/asignar-hormigas": {
+      "post": {
+        "tags": [
+          "Tareas"
+        ],
+        "summary": "Asignar Hormigas A Tarea Endpoint",
+        "description": "Asigna hormigas a una tarea existente.\n\nSi se proporciona `hormigas_lote_id` en el body y hay suficientes hormigas,\nautomáticamente inicia la tarea.",
+        "operationId": "asignar_hormigas_a_tarea_endpoint_tareas__tarea_id__asignar_hormigas_post",
+        "parameters": [
+          {
+            "name": "tarea_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tarea Id"
+            }
+          },
+          {
+            "name": "cantidad",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Cantidad"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AsignarHormigasRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Error de validación o regla de negocio",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "El alimento no está disponible. Estado: agotado"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Tarea 'T1001' no encontrada en la base de datos"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/{tarea_id}/iniciar": {
+      "post": {
+        "tags": [
+          "Tareas"
+        ],
+        "summary": "Iniciar Tarea",
+        "description": "Inicia una tarea de recolección.\n\nRequiere que se pase el ID de un lote de hormigas que contenga\nel número de hormigas requeridas para el alimento de la tarea.",
+        "operationId": "iniciar_tarea_tareas__tarea_id__iniciar_post",
+        "parameters": [
+          {
+            "name": "tarea_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tarea Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IniciarTareaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Error de validación o regla de negocio",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "El alimento no está disponible. Estado: agotado"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Tarea 'T1001' no encontrada en la base de datos"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/{tarea_id}/completar": {
+      "post": {
+        "tags": [
+          "Tareas"
+        ],
+        "summary": "Completar Tarea",
+        "description": "Completa una tarea de recolección.",
+        "operationId": "completar_tarea_tareas__tarea_id__completar_post",
+        "parameters": [
+          {
+            "name": "tarea_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tarea Id"
+            }
+          },
+          {
+            "name": "cantidad_recolectada",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Cantidad Recolectada"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Error de validación o regla de negocio",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "El alimento no está disponible. Estado: agotado"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Tarea 'T1001' no encontrada en la base de datos"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/procesar": {
+      "post": {
+        "tags": [
+          "Procesamiento"
+        ],
+        "summary": "Procesar Recoleccion",
+        "description": "Ejecuta el proceso completo de recolección.",
+        "operationId": "procesar_recoleccion_procesar_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/estadisticas": {
+      "get": {
+        "tags": [
+          "Estado y Monitoreo"
+        ],
+        "summary": "Obtener Estadisticas",
+        "description": "Obtiene estadísticas del servicio.",
+        "operationId": "obtener_estadisticas_estadisticas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/debug/db": {
+      "get": {
+        "tags": [
+          "Debug"
+        ],
+        "summary": "Debug Info Bd",
+        "description": "Devuelve detalles del motor de BD activo y conteos básicos.",
+        "operationId": "debug_info_bd_debug_db_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/debug/tareas-raw": {
+      "get": {
+        "tags": [
+          "Debug"
+        ],
+        "summary": "Debug Tareas Raw",
+        "description": "Endpoint de depuración: muestra las tareas directamente desde SQL Server sin procesar.",
+        "operationId": "debug_tareas_raw_debug_tareas_raw_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/bd": {
+      "get": {
+        "tags": [
+          "Estado y Monitoreo"
+        ],
+        "summary": "Obtener Tareas Desde Bd",
+        "description": "Obtiene todas las tareas desde la base de datos.",
+        "operationId": "obtener_tareas_desde_bd_tareas_bd_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response Obtener Tareas Desde Bd Tareas Bd Get"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/{tarea_id}/bd": {
+      "get": {
+        "tags": [
+          "Estado y Monitoreo"
+        ],
+        "summary": "Obtener Tarea Desde Bd",
+        "description": "Obtiene una tarea específica desde la base de datos por ID de alimento.",
+        "operationId": "obtener_tarea_desde_bd_tareas__tarea_id__bd_get",
+        "parameters": [
+          {
+            "name": "tarea_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tarea Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Tarea 'T1001' no encontrada en la base de datos"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eventos": {
+      "get": {
+        "tags": [
+          "Estado y Monitoreo"
+        ],
+        "summary": "Obtener Eventos",
+        "description": "Obtiene eventos recientes del subsistema.",
+        "operationId": "obtener_eventos_eventos_get",
+        "parameters": [
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limite"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/status": {
+      "get": {
+        "tags": [
+          "Estado y Monitoreo"
+        ],
+        "summary": "Obtener Status Tareas",
+        "description": "Devuelve el estado de todas las tareas desde SQL Server, incluyendo IDs de hormigas y alimento.\nVerifica automáticamente si alguna tarea debe completarse por tiempo transcurrido.",
+        "operationId": "obtener_status_tareas_tareas_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Obtener Status Tareas Tareas Status Get"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/{tarea_id}/status": {
+      "get": {
+        "tags": [
+          "Estado y Monitoreo"
+        ],
+        "summary": "Obtener Status Tarea",
+        "description": "Devuelve el estado de una tarea específica desde SQL Server, con IDs de hormigas y alimento.",
+        "operationId": "obtener_status_tarea_tareas__tarea_id__status_get",
+        "parameters": [
+          {
+            "name": "tarea_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tarea Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Obtener Status Tarea Tareas  Tarea Id  Status Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Tarea 'T1001' no encontrada en la base de datos"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/verificar-hormigas": {
+      "post": {
+        "tags": [
+          "Procesamiento"
+        ],
+        "summary": "Verificar Hormigas Muertas",
+        "description": "Verifica y maneja hormigas muertas.",
+        "operationId": "verificar_hormigas_muertas_verificar_hormigas_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "detail": "Error al consultar alimentos: conexión a BD falló"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/{tarea_id}/tiempo-restante": {
+      "get": {
+        "tags": [
+          "Estado y Monitoreo"
+        ],
+        "summary": "Obtener Tiempo Restante",
+        "description": "Obtiene el tiempo restante de una tarea en proceso.",
+        "operationId": "obtener_tiempo_restante_tareas__tarea_id__tiempo_restante_get",
+        "parameters": [
+          {
+            "name": "tarea_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tarea Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Tarea 'T1001' no encontrada en la base de datos"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/{tarea_id}/progreso": {
+      "get": {
+        "tags": [
+          "Estado y Monitoreo"
+        ],
+        "summary": "Obtener Progreso Tarea",
+        "description": "Obtiene el progreso de una tarea en proceso.",
+        "operationId": "obtener_progreso_tarea_tareas__tarea_id__progreso_get",
+        "parameters": [
+          {
+            "name": "tarea_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tarea Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Tarea 'T1001' no encontrada en la base de datos"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tareas/{tarea_id}/cancelar": {
+      "post": {
+        "tags": [
+          "Tareas"
+        ],
+        "summary": "Cancelar Tarea",
+        "description": "Cancela una tarea en proceso.",
+        "operationId": "cancelar_tarea_tareas__tarea_id__cancelar_post",
+        "parameters": [
+          {
+            "name": "tarea_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tarea Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Tarea 'T1001' no encontrada en la base de datos"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Alimento": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "cantidad_hormigas_necesarias": {
+            "type": "integer",
+            "title": "Cantidad Hormigas Necesarias"
+          },
+          "puntos_stock": {
+            "type": "integer",
+            "title": "Puntos Stock"
+          },
+          "tiempo_recoleccion": {
+            "type": "integer",
+            "title": "Tiempo Recoleccion"
+          },
+          "disponible": {
+            "type": "boolean",
+            "title": "Disponible",
+            "default": true
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "cantidad_hormigas_necesarias",
+          "puntos_stock",
+          "tiempo_recoleccion"
+        ],
+        "title": "Alimento"
+      },
+      "AsignarHormigasRequest": {
+        "properties": {
+          "hormigas_lote_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hormigas Lote Id"
+          },
+          "cantidad": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cantidad"
+          }
+        },
+        "type": "object",
+        "title": "AsignarHormigasRequest"
+      },
+      "CrearAlimentoRequest": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "cantidad_hormigas_necesarias": {
+            "type": "integer",
+            "title": "Cantidad Hormigas Necesarias"
+          },
+          "puntos_stock": {
+            "type": "integer",
+            "title": "Puntos Stock"
+          },
+          "tiempo_recoleccion": {
+            "type": "integer",
+            "title": "Tiempo Recoleccion"
+          },
+          "disponible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disponible",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "cantidad_hormigas_necesarias",
+          "puntos_stock",
+          "tiempo_recoleccion"
+        ],
+        "title": "CrearAlimentoRequest"
+      },
+      "CrearTareaRequest": {
+        "properties": {
+          "tarea_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarea Id"
+          },
+          "alimento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alimento Id"
+          }
+        },
+        "type": "object",
+        "title": "CrearTareaRequest"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "description": "Modelo de respuesta de error estándar."
+      },
+      "EstadoHormiga": {
+        "type": "string",
+        "enum": [
+          "disponible",
+          "buscando",
+          "recolectando",
+          "transportando",
+          "muerta"
+        ],
+        "title": "EstadoHormiga",
+        "description": "Estados posibles de una hormiga durante el proceso de recolección."
+      },
+      "EstadoTarea": {
+        "type": "string",
+        "enum": [
+          "pendiente",
+          "asignando_hormigas",
+          "en_proceso",
+          "completada",
+          "cancelada",
+          "pausada"
+        ],
+        "title": "EstadoTarea",
+        "description": "Estados posibles de una tarea de recolección."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Hormiga": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "capacidad_carga": {
+            "type": "integer",
+            "title": "Capacidad Carga",
+            "default": 5
+          },
+          "estado": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EstadoHormiga"
+              }
+            ],
+            "default": "disponible"
+          },
+          "tiempo_vida": {
+            "type": "integer",
+            "title": "Tiempo Vida",
+            "default": 3600
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          },
+          "subsistema_origen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subsistema Origen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "Hormiga"
+      },
+      "IniciarTareaRequest": {
+        "properties": {
+          "hormigas_lote_id": {
+            "type": "string",
+            "title": "Hormigas Lote Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hormigas_lote_id"
+        ],
+        "title": "IniciarTareaRequest"
+      },
+      "TareaRecoleccion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "alimento": {
+            "$ref": "#/components/schemas/Alimento"
+          },
+          "hormigas_asignadas": {
+            "items": {
+              "$ref": "#/components/schemas/Hormiga"
+            },
+            "type": "array",
+            "title": "Hormigas Asignadas"
+          },
+          "hormigas_lote_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hormigas Lote Id"
+          },
+          "estado": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EstadoTarea"
+              }
+            ],
+            "default": "pendiente"
+          },
+          "fecha_inicio": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Inicio"
+          },
+          "fecha_fin": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Fin"
+          },
+          "alimento_recolectado": {
+            "type": "integer",
+            "title": "Alimento Recolectado",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "alimento"
+        ],
+        "title": "TareaRecoleccion"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

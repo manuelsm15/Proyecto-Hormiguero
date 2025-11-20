@@ -4,7 +4,7 @@ Modelo que representa una tarea de recolección específica.
 
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 from .alimento import Alimento
 from .hormiga import Hormiga
@@ -20,6 +20,7 @@ class TareaRecoleccion:
         id: Identificador único de la tarea
         alimento: Alimento a recolectar
         hormigas_asignadas: Lista de hormigas asignadas a la tarea
+        hormigas_lote_id: ID del lote de hormigas que se usa para iniciar la tarea
         estado: Estado actual de la tarea
         fecha_inicio: Fecha y hora de inicio de la tarea
         fecha_fin: Fecha y hora de finalización de la tarea
@@ -29,6 +30,7 @@ class TareaRecoleccion:
     id: str
     alimento: Alimento
     hormigas_asignadas: List[Hormiga] = field(default_factory=list)
+    hormigas_lote_id: Optional[str] = None
     estado: EstadoTarea = EstadoTarea.PENDIENTE
     fecha_inicio: datetime = None
     fecha_fin: datetime = None

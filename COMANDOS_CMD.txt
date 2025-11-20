@@ -1,0 +1,80 @@
+==========================================
+COMANDOS PARA CMD (Command Prompt)
+==========================================
+
+OPCION 1: Usar PowerShell desde CMD
+==========================================
+
+GET - Consultas:
+----------------
+Health Check:
+powershell -Command "Invoke-RestMethod -Uri 'http://localhost:8000/health' -Method GET"
+
+Alimentos:
+powershell -Command "Invoke-RestMethod -Uri 'http://localhost:8000/alimentos' -Method GET"
+
+Tareas:
+powershell -Command "Invoke-RestMethod -Uri 'http://localhost:8000/tareas' -Method GET"
+
+Estadisticas:
+powershell -Command "Invoke-RestMethod -Uri 'http://localhost:8000/estadisticas' -Method GET"
+
+POST - Acciones:
+----------------
+Crear tarea:
+powershell -Command "Invoke-RestMethod -Uri 'http://localhost:8000/tareas' -Method POST"
+
+Crear tarea con parametros:
+powershell -Command "Invoke-RestMethod -Uri 'http://localhost:8000/tareas?tarea_id=test001&alimento_id=A1' -Method POST"
+
+Procesar recoleccion:
+powershell -Command "Invoke-RestMethod -Uri 'http://localhost:8000/procesar' -Method POST"
+
+==========================================
+OPCION 2: Usar curl (si esta disponible)
+==========================================
+
+GET:
+curl http://localhost:8000/health
+curl http://localhost:8000/alimentos
+curl http://localhost:8000/tareas
+
+POST:
+curl -X POST http://localhost:8000/tareas
+curl -X POST http://localhost:8000/procesar
+
+==========================================
+OPCION 3: Abrir PowerShell interactivo
+==========================================
+
+Ejecuta solo:
+powershell
+
+Luego dentro de PowerShell:
+$baseUrl = "http://localhost:8000"
+Invoke-RestMethod -Uri "$baseUrl/health" -Method GET
+
+==========================================
+OPCION 4: Usar archivos .bat (RECOMENDADO)
+==========================================
+
+Ejecuta directamente los archivos .bat:
+- test_health.bat
+- test_alimentos.bat
+- test_tareas.bat
+- test_crear_tarea.bat
+- test_procesar.bat
+- test_estadisticas.bat
+
+
+
+
+
+
+
+
+
+
+
+
+

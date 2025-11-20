@@ -15,9 +15,17 @@ class EntornoService(ABC):
     """
     
     @abstractmethod
-    async def consultar_alimentos_disponibles(self) -> List[Alimento]:
+    async def consultar_alimentos_disponibles(
+        self, 
+        zona_id: Optional[int] = None,
+        estado: Optional[str] = None
+    ) -> List[Alimento]:
         """
         Consulta todos los alimentos disponibles en el entorno.
+        
+        Args:
+            zona_id: ID de zona para filtrar (opcional)
+            estado: Estado para filtrar (opcional: "disponible", "en_proceso", "recolectado")
         
         Returns:
             Lista de alimentos disponibles
@@ -38,12 +46,17 @@ class EntornoService(ABC):
         pass
     
     @abstractmethod
-    async def marcar_alimento_como_recolectado(self, alimento_id: str) -> bool:
+    async def marcar_alimento_como_recolectado(
+        self, 
+        alimento_id: str,
+        cantidad_recolectada: Optional[int] = None
+    ) -> bool:
         """
         Marca un alimento como recolectado y actualiza su estado en el entorno.
         
         Args:
             alimento_id: ID del alimento recolectado
+            cantidad_recolectada: Cantidad que se recolectó (opcional)
             
         Returns:
             True si se actualizó correctamente, False en caso contrario
@@ -59,4 +72,28 @@ class EntornoService(ABC):
             True si está disponible, False en caso contrario
         """
         pass
+    
+    async def consultar_recursos_por_zona(self, zona_id: int) -> List[Alimento]:
+        """
+        Consulta todos los recursos de una zona específica.
+        
+        Args:
+            zona_id: ID de la zona
+            
+        Returns:
+            Lista de alimentos en esa zona
+        """
+        return await self.consultar_alimentos_disponibles(zona_id=zona_id)
+    
+    async def consultar_recursos_por_estado(self, estado: str) -> List[Alimento]:
+        """
+        Consulta recursos filtrados por estado.
+        
+        Args:
+            estado: Estado del recurso ("disponible", "en_proceso", "recolectado")
+            
+        Returns:
+            Lista de alimentos con ese estado
+        """
+        return await self.consultar_alimentos_disponibles(estado=estado)
 

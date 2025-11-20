@@ -63,20 +63,34 @@ python main.py
 
 ### 🧪 Testing
 
-#### Pruebas Unitarias
+#### Ejecutar TODAS las Pruebas (TDD + BDD + Allure)
 ```bash
-python -m pytest tests/ -v --cov=src --cov-report=html
+python scripts/run_tests_complete.py
 ```
 
-#### Pruebas BDD
+#### Solo Pruebas TDD (pytest)
 ```bash
-behave features/ -o allure-results
+python scripts/run_tdd_tests.py
+# O manualmente:
+pytest tests/ -v --cov=src --cov-report=html --allure-results-dir=allure-results
 ```
 
-#### Reportes Allure
+#### Solo Pruebas BDD (behave)
+```bash
+python scripts/run_bdd_tests.py
+# O manualmente:
+behave features/ -f allure_behave.formatter:AllureFormatter -o allure-results
+```
+
+#### Generar Reporte Allure
 ```bash
 python scripts/generate_allure_report.py
+# O manualmente:
+allure generate allure-results --clean -o allure-report
+allure open allure-report
 ```
+
+**Ver documentación completa:** [Guía de Pruebas](docs/GUIA_PRUEBAS.md)
 
 ### 🐳 Docker
 

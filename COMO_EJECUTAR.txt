@@ -1,0 +1,99 @@
+===========================================================================
+  COMO EJECUTAR Y VER EL FUNCIONAMIENTO DEL SUBSISTEMA
+===========================================================================
+
+OPCION MAS FACIL Y RECOMENDADA:
+================================
+
+1. Abre PowerShell en el directorio del proyecto
+
+2. Limpia las variables de entorno (para usar servicios mock):
+   
+   $env:BASE_API_URL=""
+   $env:ENTORNO_API_URL=""
+   $env:COMUNICACION_API_URL=""
+
+3. Inicia el servidor:
+   
+   python main.py
+
+4. Espera a que veas: "Application startup complete"
+
+5. Abre en tu navegador:
+   
+   http://localhost:8000/docs
+
+6. En la pagina web puedes:
+   - Ver todos los endpoints disponibles
+   - Probar cada endpoint directamente
+   - Ver ejemplos de requests y responses
+   - Explorar toda la funcionalidad
+
+===========================================================================
+
+OTRAS FORMAS DE PROBAR:
+=======================
+
+A. Scripts de demostracion (en otra terminal mientras el servidor corre):
+
+   python scripts/ver_funcionamiento.py
+   python scripts/demo_completa_funcional.py
+   python scripts/flujo_completo_demo.py
+
+B. PowerShell directo:
+
+   # Health check
+   Invoke-RestMethod -Uri "http://localhost:8000/health"
+   
+   # Ver estadisticas
+   Invoke-RestMethod -Uri "http://localhost:8000/estadisticas"
+   
+   # Ver eventos
+   Invoke-RestMethod -Uri "http://localhost:8000/eventos?limite=10"
+   
+   # Crear tarea
+   Invoke-RestMethod -Method POST -Uri "http://localhost:8000/tareas"
+   
+   # Ver tareas
+   Invoke-RestMethod -Uri "http://localhost:8000/tareas"
+
+===========================================================================
+
+VER PRUEBAS Y COBERTURA:
+========================
+
+1. Ejecutar todas las pruebas:
+   
+   pytest tests/ -v --cov=src --cov-report=html
+
+2. Ver reporte de cobertura:
+   
+   Abre: htmlcov/index.html
+
+===========================================================================
+
+SOLUCION DE PROBLEMAS:
+======================
+
+Si ves "Servicio de entorno no disponible":
+  - Limpia las variables de entorno como se muestra arriba
+  - El sistema usara servicios mock automaticamente
+
+Si el puerto 8000 esta ocupado:
+  - Cierra otros procesos en el puerto 8000
+  - O cambia el puerto en main.py
+
+===========================================================================
+
+RESUMEN:
+========
+
+LA FORMA MAS FACIL:
+  1. python main.py
+  2. Abre http://localhost:8000/docs en tu navegador
+  3. Prueba todo desde ahi!
+
+===========================================================================
+
+
+

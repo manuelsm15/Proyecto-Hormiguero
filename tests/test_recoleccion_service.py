@@ -60,6 +60,7 @@ class TestRecoleccionService:
     ):
         """Prueba la consulta exitosa de alimentos disponibles."""
         # Arrange
+        mock_entorno_service.is_disponible.return_value = True
         mock_entorno_service.consultar_alimentos_disponibles.return_value = [alimento_ejemplo]
         
         # Act
@@ -69,7 +70,48 @@ class TestRecoleccionService:
         assert len(resultado) == 1
         assert resultado[0].id == "alimento_001"
         assert resultado[0].nombre == "Fruta"
-        mock_entorno_service.consultar_alimentos_disponibles.assert_called_once()
+        mock_entorno_service.consultar_alimentos_disponibles.assert_called_once_with(
+            zona_id=None,
+            estado=None
+        )
+    
+    @pytest.mark.asyncio
+    async def test_consultar_alimentos_disponibles_por_zona(
+        self, recoleccion_service, mock_entorno_service, alimento_ejemplo
+    ):
+        """Prueba la consulta de alimentos filtrados por zona."""
+        # Arrange
+        mock_entorno_service.is_disponible.return_value = True
+        mock_entorno_service.consultar_alimentos_disponibles.return_value = [alimento_ejemplo]
+        
+        # Act
+        resultado = await recoleccion_service.consultar_alimentos_disponibles(zona_id=1)
+        
+        # Assert
+        assert len(resultado) == 1
+        mock_entorno_service.consultar_alimentos_disponibles.assert_called_once_with(
+            zona_id=1,
+            estado=None
+        )
+    
+    @pytest.mark.asyncio
+    async def test_consultar_alimentos_disponibles_por_estado(
+        self, recoleccion_service, mock_entorno_service, alimento_ejemplo
+    ):
+        """Prueba la consulta de alimentos filtrados por estado."""
+        # Arrange
+        mock_entorno_service.is_disponible.return_value = True
+        mock_entorno_service.consultar_alimentos_disponibles.return_value = [alimento_ejemplo]
+        
+        # Act
+        resultado = await recoleccion_service.consultar_alimentos_disponibles(estado="disponible")
+        
+        # Assert
+        assert len(resultado) == 1
+        mock_entorno_service.consultar_alimentos_disponibles.assert_called_once_with(
+            zona_id=None,
+            estado="disponible"
+        )
 
     @pytest.mark.asyncio
     async def test_consultar_alimentos_disponibles_servicio_no_disponible(
@@ -193,6 +235,8 @@ class TestRecoleccionService:
         assert tarea.estado == EstadoTarea.COMPLETADA
         assert tarea.alimento_recolectado == 10
         assert tarea.fecha_fin is not None
+        # Verificar que el alimento se marcó como no disponible
+        assert tarea.alimento.disponible is False
 
     @pytest.mark.asyncio
     async def test_devolver_hormigas_exitoso(

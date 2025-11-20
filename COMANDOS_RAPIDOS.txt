@@ -1,0 +1,84 @@
+==========================================
+COMANDOS RAPIDOS PARA PROBAR LA API
+==========================================
+
+1. CONFIGURAR URL BASE (en PowerShell):
+   $baseUrl = "http://localhost:8000"
+
+==========================================
+GET - CONSULTAS
+==========================================
+
+Health Check:
+Invoke-RestMethod -Uri "$baseUrl/health" -Method GET
+
+Alimentos disponibles:
+Invoke-RestMethod -Uri "$baseUrl/alimentos" -Method GET
+
+Alimentos por zona:
+Invoke-RestMethod -Uri "$baseUrl/alimentos?zona_id=1" -Method GET
+
+Alimentos por estado:
+Invoke-RestMethod -Uri "$baseUrl/alimentos?estado=disponible" -Method GET
+
+Todas las tareas:
+Invoke-RestMethod -Uri "$baseUrl/tareas" -Method GET
+
+Tareas activas:
+Invoke-RestMethod -Uri "$baseUrl/tareas/activas" -Method GET
+
+Tareas completadas:
+Invoke-RestMethod -Uri "$baseUrl/tareas/completadas" -Method GET
+
+Estadisticas:
+Invoke-RestMethod -Uri "$baseUrl/estadisticas" -Method GET
+
+Eventos:
+Invoke-RestMethod -Uri "$baseUrl/eventos?limite=10" -Method GET
+
+==========================================
+POST - CREACION Y ACCIONES
+==========================================
+
+Crear tarea (automatico):
+Invoke-RestMethod -Uri "$baseUrl/tareas" -Method POST
+
+Crear tarea con ID y alimento:
+Invoke-RestMethod -Uri "$baseUrl/tareas?tarea_id=test001&alimento_id=A1" -Method POST
+
+Iniciar tarea (reemplazar TAREA_ID):
+Invoke-RestMethod -Uri "$baseUrl/tareas/TAREA_ID/iniciar" -Method POST
+
+Procesar recoleccion completa:
+Invoke-RestMethod -Uri "$baseUrl/procesar" -Method POST
+
+Completar tarea (reemplazar TAREA_ID):
+Invoke-RestMethod -Uri "$baseUrl/tareas/TAREA_ID/completar?cantidad_recolectada=10" -Method POST
+
+Verificar hormigas:
+Invoke-RestMethod -Uri "$baseUrl/verificar-hormigas" -Method POST
+
+==========================================
+EJEMPLO FLUJO COMPLETO
+==========================================
+
+1. Crear tarea:
+   $r = Invoke-RestMethod -Uri "$baseUrl/tareas?tarea_id=mi_tarea&alimento_id=A1" -Method POST
+   $id = $r.id
+
+2. Iniciar:
+   Invoke-RestMethod -Uri "$baseUrl/tareas/$id/iniciar" -Method POST
+
+3. Ver progreso:
+   Invoke-RestMethod -Uri "$baseUrl/tareas/$id/progreso" -Method GET
+
+4. Completar:
+   Invoke-RestMethod -Uri "$baseUrl/tareas/$id/completar?cantidad_recolectada=10" -Method POST
+
+==========================================
+VER RESPUESTAS FORMATEADAS
+==========================================
+
+$r = Invoke-RestMethod -Uri "$baseUrl/tareas" -Method GET
+$r | ConvertTo-Json -Depth 10
+

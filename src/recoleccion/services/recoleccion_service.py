@@ -57,10 +57,32 @@ class RecoleccionService:
                 self.tareas_activas.remove(tarea)
             if tarea not in self.tareas_completadas:
                 self.tareas_completadas.append(tarea)
+            
+            # Persistir tarea completada en BD
+            try:
+                from ..services.persistence_service import persistence_service
+                await persistence_service.guardar_tarea(tarea)
+                await persistence_service.actualizar_estado_tarea(tarea.id, tarea.estado)
+                # Guardar evento de completado
+                await persistence_service.guardar_evento(
+                    "tarea_completada_automatica",
+                    f"Tarea {tarea.id} completada automáticamente por timer",
+                    {"tarea_id": tarea.id, "alimento_id": tarea.alimento.id, "cantidad": tarea.alimento_recolectado}
+                )
+            except Exception as e:
+                print(f"Advertencia: No se pudo persistir tarea completada automáticamente en BD: {e}")
     
-    async def consultar_alimentos_disponibles(self) -> List[Alimento]:
+    async def consultar_alimentos_disponibles(
+        self,
+        zona_id: Optional[int] = None,
+        estado: Optional[str] = None
+    ) -> List[Alimento]:
         """
         Consulta los alimentos disponibles en el entorno.
+        
+        Args:
+            zona_id: ID de zona para filtrar (opcional)
+            estado: Estado para filtrar (opcional: "disponible", "en_proceso", "recolectado")
         
         Returns:
             Lista de alimentos disponibles
@@ -71,7 +93,10 @@ class RecoleccionService:
         if not await self.entorno_service.is_disponible():
             raise Exception("Servicio de entorno no disponible")
         
-        return await self.entorno_service.consultar_alimentos_disponibles()
+        return await self.entorno_service.consultar_alimentos_disponibles(
+            zona_id=zona_id,
+            estado=estado
+        )
     
     async def crear_tarea_recoleccion(self, tarea_id: str, alimento: Alimento) -> TareaRecoleccion:
         """
@@ -83,9 +108,25 @@ class RecoleccionService:
             
         Returns:
             Tarea de recolección creada
+            
+        Raises:
+            ValueError: Si el alimento no está disponible
         """
+        # Validar que el alimento esté disponible
+        if not alimento.disponible:
+            raise ValueError(f"El alimento '{alimento.nombre}' (ID: {alimento.id}) no está disponible. Estado: agotado")
+        
         tarea = TareaRecoleccion(id=tarea_id, alimento=alimento)
         self.tareas_activas.append(tarea)
+        
+        # Persistir en base de datos
+        try:
+            from ..services.persistence_service import persistence_service
+            await persistence_service.guardar_tarea(tarea)
+        except Exception as e:
+            # Si falla la persistencia, continuar sin ella
+            print(f"Advertencia: No se pudo persistir la tarea: {e}")
+        
         return tarea
     
     async def solicitar_hormigas(self, cantidad: int) -> List[Hormiga]:
@@ -124,19 +165,31 @@ class RecoleccionService:
         for hormiga in hormigas:
             tarea.agregar_hormiga(hormiga)
             hormiga.cambiar_estado(EstadoHormiga.DISPONIBLE)
+        
+        # Persistir tarea con hormigas asignadas en BD
+        try:
+            from ..services.persistence_service import persistence_service
+            await persistence_service.guardar_tarea(tarea)
+        except Exception as e:
+            print(f"Advertencia: No se pudo persistir tarea con hormigas asignadas en BD: {e}")
     
-    async def iniciar_tarea_recoleccion(self, tarea: TareaRecoleccion) -> None:
+    async def iniciar_tarea_recoleccion(self, tarea: TareaRecoleccion, hormigas_lote_id: Optional[str] = None) -> None:
         """
         Inicia una tarea de recolección con timer en tiempo real.
         
         Args:
             tarea: Tarea a iniciar
+            hormigas_lote_id: ID opcional del lote de hormigas que se usa para iniciar la tarea.
             
         Raises:
             ValueError: Si la tarea no puede ser iniciada
         """
         if not tarea.tiene_suficientes_hormigas():
             raise ValueError("No se puede iniciar la tarea sin suficientes hormigas")
+        
+        # Si se proporciona un lote ID, guardarlo en la tarea
+        if hormigas_lote_id is not None:
+            tarea.hormigas_lote_id = hormigas_lote_id
         
         # Usar timer service para manejo en tiempo real
         try:
@@ -150,6 +203,63 @@ class RecoleccionService:
         # Agregar a tareas activas si no está
         if tarea not in self.tareas_activas:
             self.tareas_activas.append(tarea)
+        
+        # Actualizar persistencia
+        try:
+            from ..services.persistence_service import persistence_service
+            await persistence_service.guardar_tarea(tarea)
+            await persistence_service.actualizar_estado_tarea(tarea.id, tarea.estado)
+        except Exception as e:
+            print(f"Advertencia: No se pudo actualizar la tarea en BD: {e}")
+    
+    async def verificar_y_completar_tarea_por_tiempo(self, tarea: TareaRecoleccion) -> bool:
+        """
+        Verifica si una tarea debe completarse automáticamente por tiempo transcurrido.
+        
+        Args:
+            tarea: Tarea a verificar
+            
+        Returns:
+            True si se completó la tarea, False si no era necesario
+        """
+        # Obtener estado como valor para comparar
+        estado_valor = tarea.estado.value if hasattr(tarea.estado, 'value') else str(tarea.estado)
+        
+        # Solo verificar tareas en proceso
+        if estado_valor != "en_proceso":
+            return False
+        
+        # Debe tener fecha de inicio
+        if not tarea.fecha_inicio:
+            return False
+        
+        # Calcular tiempo transcurrido
+        from datetime import datetime, timedelta
+        ahora = datetime.now()
+        tiempo_transcurrido = (ahora - tarea.fecha_inicio).total_seconds()
+        tiempo_recoleccion = tarea.alimento.tiempo_recoleccion
+        
+        # Si el tiempo transcurrido es mayor o igual al tiempo de recolección, completar
+        if tiempo_transcurrido >= tiempo_recoleccion:
+            # Calcular fecha_fin como fecha_inicio + tiempo_recoleccion (momento exacto de finalización)
+            fecha_fin_calculada = tarea.fecha_inicio + timedelta(seconds=tiempo_recoleccion)
+            
+            # Completar la tarea (esto establece fecha_fin = datetime.now() temporalmente)
+            await self.completar_tarea_recoleccion(tarea, tarea.alimento.puntos_stock)
+            
+            # Sobrescribir fecha_fin con el tiempo exacto calculado (fecha_inicio + tiempo_recoleccion)
+            tarea.fecha_fin = fecha_fin_calculada
+            
+            # Persistir nuevamente con la fecha_fin correcta
+            try:
+                from ..services.persistence_service import persistence_service
+                await persistence_service.guardar_tarea(tarea)
+            except Exception as e:
+                print(f"Advertencia: No se pudo actualizar fecha_fin en BD: {e}")
+            
+            return True
+        
+        return False
     
     async def completar_tarea_recoleccion(self, tarea: TareaRecoleccion, cantidad_recolectada: int) -> None:
         """
@@ -165,9 +275,23 @@ class RecoleccionService:
         for hormiga in tarea.hormigas_asignadas:
             hormiga.cambiar_estado(EstadoHormiga.TRANSPORTANDO)
         
+        # Marcar el alimento como no disponible (agotado)
+        tarea.alimento.marcar_como_recolectado()
+        
         # Mover tarea a completadas
-        self.tareas_activas.remove(tarea)
-        self.tareas_completadas.append(tarea)
+        if tarea in self.tareas_activas:
+            self.tareas_activas.remove(tarea)
+        if tarea not in self.tareas_completadas:
+            self.tareas_completadas.append(tarea)
+        
+        # Persistir tarea completada y actualizar disponibilidad del alimento en BD
+        try:
+            from ..services.persistence_service import persistence_service
+            await persistence_service.guardar_tarea(tarea)
+            await persistence_service.actualizar_estado_tarea(tarea.id, tarea.estado)
+            await persistence_service.actualizar_alimento_disponibilidad(tarea.alimento.id, False)
+        except Exception as e:
+            print(f"Advertencia: No se pudo persistir tarea completada o actualizar alimento en BD: {e}")
     
     async def devolver_hormigas(self, hormigas: List[Hormiga], alimento_recolectado: int) -> str:
         """
@@ -195,8 +319,19 @@ class RecoleccionService:
         tareas_procesadas = []
         
         try:
-            # 1. Consultar alimentos disponibles
-            alimentos = await self.consultar_alimentos_disponibles()
+            # 1. Consultar alimentos desde BD primero; si falla o no hay, usar servicio de entorno
+            alimentos = []
+            try:
+                from ..services.persistence_service import persistence_service
+                alimentos = await persistence_service.obtener_alimentos()
+            except Exception:
+                alimentos = []
+            if not alimentos:
+                # Fallback a servicio de entorno (si estuviera configurado)
+                try:
+                    alimentos = await self.consultar_alimentos_disponibles()
+                except Exception:
+                    alimentos = []
             
             for alimento in alimentos:
                 if not alimento.disponible:
@@ -211,25 +346,48 @@ class RecoleccionService:
                 
                 if not hormigas:
                     tarea.estado = EstadoTarea.CANCELADA
+                    # Persistir estado cancelado
+                    try:
+                        from ..services.persistence_service import persistence_service
+                        await persistence_service.actualizar_estado_tarea(tarea.id, tarea.estado)
+                    except Exception:
+                        pass
                     continue
                 
-                # 4. Asignar hormigas a la tarea
+                # 4. Asignar hormigas a la tarea (esto ya persiste en BD)
                 await self.asignar_hormigas_a_tarea(tarea, hormigas)
                 
-                # 5. Iniciar tarea
+                # 5. Iniciar tarea (esto ya persiste en BD)
                 await self.iniciar_tarea_recoleccion(tarea)
                 
                 # 6. Simular proceso de recolección
                 await asyncio.sleep(0.1)  # Simulación de tiempo de recolección
                 
-                # 7. Completar tarea
+                # 7. Completar tarea (esto ya persiste en BD)
                 await self.completar_tarea_recoleccion(tarea, alimento.puntos_stock)
                 
                 # 8. Devolver hormigas
                 await self.devolver_hormigas(hormigas, alimento.puntos_stock)
                 
-                # 9. Marcar alimento como recolectado en el entorno
-                await self.entorno_service.marcar_alimento_como_recolectado(alimento.id)
+                # 9. Intentar marcar alimento como recolectado en entorno (si disponible)
+                try:
+                    await self.entorno_service.marcar_alimento_como_recolectado(
+                        alimento.id, 
+                        cantidad_recolectada=alimento.puntos_stock
+                    )
+                except Exception:
+                    pass
+                
+                # Guardar evento de procesamiento exitoso
+                try:
+                    from ..services.persistence_service import persistence_service
+                    await persistence_service.guardar_evento(
+                        "tarea_procesada",
+                        f"Tarea {tarea.id} procesada exitosamente",
+                        {"tarea_id": tarea.id, "alimento_id": alimento.id, "cantidad": alimento.puntos_stock}
+                    )
+                except Exception:
+                    pass
                 
                 tareas_procesadas.append(tarea)
         

@@ -1,0 +1,508 @@
+{
+	"info": {
+		"_postman_id": "subsistema-recoleccion",
+		"name": "Subsistema de Recolección de Alimentos",
+		"description": "Colección completa de endpoints para el subsistema de recolección de alimentos",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Información General",
+			"item": [
+				{
+					"name": "Root - Endpoint Raíz",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": [""]
+						}
+					}
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["health"]
+						}
+					}
+				},
+				{
+					"name": "Documentación OpenAPI",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/openapi.json",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["openapi.json"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Alimentos",
+			"item": [
+				{
+					"name": "Listar Todos los Alimentos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/alimentos",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["alimentos"]
+						}
+					}
+				},
+				{
+					"name": "Listar Alimentos por Zona",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/alimentos?zona_id=1",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["alimentos"],
+							"query": [
+								{
+									"key": "zona_id",
+									"value": "1",
+									"description": "ID de la zona"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Listar Alimentos por Estado",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/alimentos?estado=disponible",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["alimentos"],
+							"query": [
+								{
+									"key": "estado",
+									"value": "disponible",
+									"description": "Estado: disponible, en_proceso, recolectado"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Listar Alimentos Filtrados (Zona + Estado)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/alimentos?zona_id=1&estado=disponible",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["alimentos"],
+							"query": [
+								{
+									"key": "zona_id",
+									"value": "1"
+								},
+								{
+									"key": "estado",
+									"value": "disponible"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Tareas",
+			"item": [
+				{
+					"name": "Crear Tarea (Valores por Defecto)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas"]
+						}
+					}
+				},
+				{
+					"name": "Crear Tarea con Parámetros",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas?tarea_id=tarea_001&alimento_id=A1",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas"],
+							"query": [
+								{
+									"key": "tarea_id",
+									"value": "tarea_001",
+									"description": "ID único de la tarea"
+								},
+								{
+									"key": "alimento_id",
+									"value": "A1",
+									"description": "ID del alimento a recolectar"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Listar Todas las Tareas",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas"]
+						}
+					}
+				},
+				{
+					"name": "Listar Tareas Activas",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas/activas",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas", "activas"]
+						}
+					}
+				},
+				{
+					"name": "Listar Tareas Completadas",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas/completadas",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas", "completadas"]
+						}
+					}
+				},
+				{
+					"name": "Listar Tareas en Proceso",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas/en-proceso",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas", "en-proceso"]
+						}
+					}
+				},
+				{
+					"name": "Iniciar Tarea",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas/{{tarea_id}}/iniciar",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas", "{{tarea_id}}", "iniciar"],
+							"variable": [
+								{
+									"key": "tarea_id",
+									"value": "tarea_001",
+									"description": "ID de la tarea a iniciar"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Completar Tarea",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"cantidad_recolectada\": 10\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8000/tareas/{{tarea_id}}/completar?cantidad_recolectada=10",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas", "{{tarea_id}}", "completar"],
+							"query": [
+								{
+									"key": "cantidad_recolectada",
+									"value": "10",
+									"description": "Cantidad de alimento recolectado"
+								}
+							],
+							"variable": [
+								{
+									"key": "tarea_id",
+									"value": "tarea_001"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Obtener Tiempo Restante",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas/{{tarea_id}}/tiempo-restante",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas", "{{tarea_id}}", "tiempo-restante"],
+							"variable": [
+								{
+									"key": "tarea_id",
+									"value": "tarea_001"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Obtener Progreso",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas/{{tarea_id}}/progreso",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas", "{{tarea_id}}", "progreso"],
+							"variable": [
+								{
+									"key": "tarea_id",
+									"value": "tarea_001"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Cancelar Tarea",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas/{{tarea_id}}/cancelar",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas", "{{tarea_id}}", "cancelar"],
+							"variable": [
+								{
+									"key": "tarea_id",
+									"value": "tarea_001"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Base de Datos",
+			"item": [
+				{
+					"name": "Tareas desde BD",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas/bd",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas", "bd"]
+						}
+					}
+				},
+				{
+					"name": "Tarea Específica desde BD",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/tareas/{{tarea_id}}/bd",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["tareas", "{{tarea_id}}", "bd"],
+							"variable": [
+								{
+									"key": "tarea_id",
+									"value": "tarea_001"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Procesamiento",
+			"item": [
+				{
+					"name": "Procesar Recolección Automática",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/procesar",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["procesar"]
+						},
+						"description": "Ejecuta el proceso completo de recolección automática:\n- Consulta alimentos disponibles\n- Crea tareas\n- Solicita hormigas\n- Inicia recolección\n- Completa tareas\n- Devuelve hormigas con alimento"
+					}
+				},
+				{
+					"name": "Verificar Hormigas Muertas",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/verificar-hormigas",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["verificar-hormigas"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Estadísticas y Monitoreo",
+			"item": [
+				{
+					"name": "Obtener Estadísticas",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/estadisticas",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["estadisticas"]
+						}
+					}
+				},
+				{
+					"name": "Obtener Eventos (Limitado)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/eventos?limite=10",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["eventos"],
+							"query": [
+								{
+									"key": "limite",
+									"value": "10",
+									"description": "Cantidad de eventos a retornar (1-1000)"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Obtener Todos los Eventos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/eventos?limite=1000",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["eventos"],
+							"query": [
+								{
+									"key": "limite",
+									"value": "1000"
+								}
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "tarea_id",
+			"value": "tarea_001",
+			"type": "string"
+		}
+	]
+}
+
+
+

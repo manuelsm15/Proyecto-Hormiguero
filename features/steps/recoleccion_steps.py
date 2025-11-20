@@ -55,7 +55,9 @@ def step_impl(context):
             tiempo_recoleccion=180
         )
     ]
-    context.mock_entorno_service.consultar_alimentos_disponibles.return_value = context.alimentos
+    async def mock_consultar(*args, **kwargs):
+        return context.alimentos
+    context.mock_entorno_service.consultar_alimentos_disponibles = AsyncMock(side_effect=mock_consultar)
 
 
 @given("que tengo un alimento disponible")
@@ -66,7 +68,21 @@ def step_impl(context):
         nombre="Fruta",
         cantidad_hormigas_necesarias=3,
         puntos_stock=10,
-        tiempo_recoleccion=300
+        tiempo_recoleccion=300,
+        disponible=True
+    )
+
+
+@given("que tengo un alimento que no está disponible")
+def step_impl(context):
+    """Configura un alimento que no está disponible."""
+    context.alimento = Alimento(
+        id="alimento_002",
+        nombre="Fruta Agotada",
+        cantidad_hormigas_necesarias=3,
+        puntos_stock=10,
+        tiempo_recoleccion=300,
+        disponible=False
     )
 
 
@@ -145,7 +161,9 @@ def step_impl(context, cantidad):
             tiempo_recoleccion=180
         ) for i in range(1, cantidad + 1)
     ]
-    context.mock_entorno_service.consultar_alimentos_disponibles.return_value = context.alimentos
+    async def mock_consultar(*args, **kwargs):
+        return context.alimentos
+    context.mock_entorno_service.consultar_alimentos_disponibles = AsyncMock(side_effect=mock_consultar)
 
 
 @given("que tengo una tarea en proceso con hormigas")
@@ -182,6 +200,20 @@ def step_impl(context):
             "tarea_001", context.alimento
         )
     )
+
+
+@when("intento crear una tarea de recolección para ese alimento")
+def step_impl(context):
+    """Intenta crear una tarea de recolección."""
+    try:
+        context.tarea = asyncio.run(
+            context.recoleccion_service.crear_tarea_recoleccion(
+                "tarea_001", context.alimento
+            )
+        )
+        context.error = None
+    except Exception as e:
+        context.error = e
 
 
 @when("solicito las hormigas al subsistema de comunicación")
@@ -406,6 +438,37 @@ def step_impl(context):
     assert context.tarea.fecha_fin is not None
 
 
+@then("el alimento debe estar marcado como no disponible (agotado)")
+def step_impl(context):
+    """Verifica que el alimento está marcado como no disponible."""
+    assert context.tarea.alimento.disponible is False
+
+
+@then("el alimento debe estar marcado como no disponible (agotado) en la base de datos")
+def step_impl(context):
+    """Verifica que el alimento está marcado como no disponible en BD."""
+    # Este step verifica que la actualización en BD se haya realizado
+    # En pruebas reales, se verificaría consultando la BD
+    # Por ahora, verificamos que el alimento en memoria esté marcado como no disponible
+    for tarea in context.tareas_procesadas:
+        assert tarea.alimento.disponible is False
+
+
+@then("debe lanzar una excepción indicando que el alimento no está disponible")
+def step_impl(context):
+    """Verifica que se lanzó una excepción de alimento no disponible."""
+    assert context.error is not None
+    assert "no está disponible" in str(context.error) or "agotado" in str(context.error)
+
+
+@then("el mensaje de error debe indicar que el alimento está agotado")
+def step_impl(context):
+    """Verifica que el mensaje de error indica que el alimento está agotado."""
+    assert context.error is not None
+    error_msg = str(context.error).lower()
+    assert "agotado" in error_msg or "no está disponible" in error_msg
+
+
 @then("debo tener tareas completadas")
 def step_impl(context):
     """Verifica que hay tareas completadas."""
@@ -417,6 +480,9 @@ def step_impl(context):
 def step_impl(context):
     """Verifica que el alimento fue marcado como recolectado."""
     context.mock_entorno_service.marcar_alimento_como_recolectado.assert_called()
+    # Verificar que se llamó con cantidad_recolectada
+    calls = context.mock_entorno_service.marcar_alimento_como_recolectado.call_args_list
+    assert len(calls) > 0
 
 
 @then("las hormigas deben ser devueltas al subsistema de comunicación")

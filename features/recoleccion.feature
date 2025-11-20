@@ -23,6 +23,13 @@ Feature: Subsistema de Recoleccion de Alimentos
     And la tarea debe tener el alimento asignado
 
   @unitario
+  Scenario: Fallar al crear tarea con alimento no disponible
+    Given que tengo un alimento que no está disponible
+    When intento crear una tarea de recolección para ese alimento
+    Then debe lanzar una excepción indicando que el alimento no está disponible
+    And el mensaje de error debe indicar que el alimento está agotado
+
+  @unitario
   Scenario: Solicitar hormigas para recolección
     Given que necesito 3 hormigas para una tarea
     When solicito las hormigas al subsistema de comunicación
@@ -60,6 +67,7 @@ Feature: Subsistema de Recoleccion de Alimentos
     And la tarea debe tener 10 unidades de alimento recolectado
     And las hormigas deben estar en estado TRANSPORTANDO
     And la tarea debe tener fecha de finalización
+    And el alimento debe estar marcado como no disponible (agotado)
 
   @integracion
   Scenario: Procesar recolección completa
@@ -67,6 +75,7 @@ Feature: Subsistema de Recoleccion de Alimentos
     When ejecuto el proceso completo de recolección
     Then debo tener tareas completadas
     And el alimento debe estar marcado como recolectado en el entorno
+    And el alimento debe estar marcado como no disponible (agotado) en la base de datos
     And las hormigas deben ser devueltas al subsistema de comunicación
 
   @integracion
