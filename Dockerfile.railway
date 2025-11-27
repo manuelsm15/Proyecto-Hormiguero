@@ -24,4 +24,5 @@ RUN mkdir -p allure-results allure-report htmlcov
 EXPOSE 8000
 
 # Comando para iniciar la aplicación usando el archivo optimizado para Railway
-CMD ["python", "railway_main.py"]
+# Usar ENTRYPOINT para asegurar que siempre se ejecute railway_main.py
+ENTRYPOINT ["python", "railway_main.py"]
