@@ -1,0 +1,12 @@
+# Configuración para Cloudflare Pages
+# Este archivo se usa cuando despliegas como Cloudflare Pages
+
+[build]
+command = "pip install --upgrade pip setuptools wheel && pip install -r requirements.txt"
+publish = "."
+
+[build.environment]
+PYTHON_VERSION = "3.12"
+NODE_VERSION = "18"
+PYTHON = "3.12"
+
