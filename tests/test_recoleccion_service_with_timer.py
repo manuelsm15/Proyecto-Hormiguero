@@ -154,13 +154,27 @@ class TestRecoleccionServiceWithTimer:
         assert isinstance(mensaje_id, str)
     
     @pytest.mark.asyncio
-    async def test_procesar_tarea_completa_exitoso(self, recoleccion_service):
+    async def test_procesar_tarea_completa_exitoso(self, recoleccion_service, alimento_ejemplo, hormigas_ejemplo):
         """Prueba procesar tarea completa exitosamente."""
-        resultado = await recoleccion_service.procesar_recoleccion()
+        from unittest.mock import patch, AsyncMock
         
-        assert resultado is not None
-        assert isinstance(resultado, list)
-        assert len(resultado) > 0
+        # Arrange - configurar mocks del servicio usando patch
+        with patch.object(recoleccion_service.entorno_service, 'is_disponible', return_value=True), \
+             patch.object(recoleccion_service.entorno_service, 'consultar_alimentos_disponibles', return_value=[alimento_ejemplo]), \
+             patch.object(recoleccion_service.entorno_service, 'marcar_alimento_como_recolectado', return_value=True), \
+             patch.object(recoleccion_service.comunicacion_service, 'is_disponible', return_value=True), \
+             patch.object(recoleccion_service.comunicacion_service, 'solicitar_hormigas', return_value="mensaje_001"), \
+             patch.object(recoleccion_service.comunicacion_service, 'consultar_respuesta_hormigas', return_value=hormigas_ejemplo), \
+             patch.object(recoleccion_service.comunicacion_service, 'devolver_hormigas', return_value="mensaje_002"), \
+             patch('src.recoleccion.services.persistence_service.persistence_service') as mock_persistence:
+            
+            mock_persistence.obtener_alimentos = AsyncMock(return_value=[])
+            
+            resultado = await recoleccion_service.procesar_recoleccion()
+            
+            assert resultado is not None
+            assert isinstance(resultado, list)
+            assert len(resultado) > 0
         
         # Verificar que las tareas están completadas
         for tarea in resultado:

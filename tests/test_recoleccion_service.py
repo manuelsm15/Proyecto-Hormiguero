@@ -169,10 +169,11 @@ class TestRecoleccionService:
         )
         
         # Act
-        await recoleccion_service.asignar_hormigas_a_tarea(tarea, [hormiga_ejemplo])
+        # Enviar suficientes hormigas (3) para que pase la validación
+        await recoleccion_service.asignar_hormigas_a_tarea(tarea, [hormiga_ejemplo] * 3)
         
         # Assert
-        assert len(tarea.hormigas_asignadas) == 1
+        assert len(tarea.hormigas_asignadas) == 3
         assert tarea.hormigas_asignadas[0].id == "hormiga_001"
 
     @pytest.mark.asyncio
@@ -263,19 +264,27 @@ class TestRecoleccionService:
         alimento_ejemplo, hormiga_ejemplo
     ):
         """Prueba el procesamiento completo de una tarea de recolección."""
+        from unittest.mock import patch, AsyncMock
+        
         # Arrange
+        mock_entorno_service.is_disponible.return_value = True
         mock_entorno_service.consultar_alimentos_disponibles.return_value = [alimento_ejemplo]
+        mock_comunicacion_service.is_disponible.return_value = True
         mock_comunicacion_service.solicitar_hormigas.return_value = "mensaje_001"
         mock_comunicacion_service.consultar_respuesta_hormigas.return_value = [hormiga_ejemplo] * 3
         mock_comunicacion_service.devolver_hormigas.return_value = "mensaje_002"
         mock_entorno_service.marcar_alimento_como_recolectado.return_value = True
         
-        # Act
-        resultado = await recoleccion_service.procesar_recoleccion()
-        
-        # Assert
-        assert resultado is not None
-        assert len(resultado) > 0
+        # Mockear la BD para que retorne lista vacía y use el servicio de entorno
+        with patch('src.recoleccion.services.persistence_service.persistence_service') as mock_persistence:
+            mock_persistence.obtener_alimentos = AsyncMock(return_value=[])
+            
+            # Act
+            resultado = await recoleccion_service.procesar_recoleccion()
+            
+            # Assert
+            assert resultado is not None
+            assert len(resultado) > 0
         mock_entorno_service.consultar_alimentos_disponibles.assert_called_once()
         mock_comunicacion_service.solicitar_hormigas.assert_called_once()
         mock_comunicacion_service.devolver_hormigas.assert_called_once()

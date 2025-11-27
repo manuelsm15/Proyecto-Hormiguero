@@ -92,12 +92,6 @@ def step_impl(context, cantidad):
     context.cantidad_hormigas = cantidad
 
 
-@given("que tengo una tarea de recolección")
-def step_impl(context):
-    """Crea una tarea de recolección."""
-    context.tarea = context.recoleccion_service.tareas_activas[0] if context.recoleccion_service.tareas_activas else None
-
-
 @given("que tengo hormigas disponibles")
 def step_impl(context):
     """Configura hormigas disponibles."""

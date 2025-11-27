@@ -158,8 +158,19 @@ def save_allure_result(test_name, status, description, request_data=None, respon
     result_file.write_text(json.dumps(result, ensure_ascii=False), encoding='utf-8')
 
 
-def safe_request(method, url, json_data=None, test_name=None, timeout=10):
-    """Hace una petición HTTP con manejo de errores y guarda en Allure."""
+def safe_request(method, url, json_data=None, test_name=None, timeout=10, expected_status=None):
+    """
+    Hace una petición HTTP con manejo de errores y guarda en Allure.
+    
+    Args:
+        method: Método HTTP (GET, POST, etc.)
+        url: URL de la petición
+        json_data: Datos JSON para el body (opcional)
+        test_name: Nombre de la prueba para Allure (opcional)
+        timeout: Timeout en segundos (default: 10)
+        expected_status: Status code esperado. Si se proporciona y coincide, se marca como passed.
+                        Útil para pruebas que esperan errores (ej: 400, 404).
+    """
     start_time = time.time()
     try:
         if method.upper() == "GET":
@@ -171,7 +182,21 @@ def safe_request(method, url, json_data=None, test_name=None, timeout=10):
         
         # Guardar en Allure
         if test_name:
-            status = "passed" if response.status_code < 400 else "failed"
+            # Si se espera un status específico y coincide, marcar como passed
+            if expected_status is not None and response.status_code == expected_status:
+                status = "passed"
+                error = None
+            elif expected_status is not None:
+                # Se esperaba un status pero se obtuvo otro
+                status = "failed"
+                error = f"Se esperaba status {expected_status} pero se obtuvo {response.status_code}"
+            elif response.status_code < 400:
+                status = "passed"
+                error = None
+            else:
+                status = "failed"
+                error = f"Status code: {response.status_code}"
+            
             response_data = None
             try:
                 response_data = response.json()
@@ -184,7 +209,7 @@ def safe_request(method, url, json_data=None, test_name=None, timeout=10):
                 description=f"{method} {url}",
                 request_data=json_data if json_data else {"method": method, "url": url},
                 response_data={"status_code": response.status_code, "body": response_data},
-                error=None if status == "passed" else f"Status code: {response.status_code}"
+                error=error
             )
         
         return response
@@ -449,7 +474,13 @@ def main():
         }
         print_request("POST", url, body)
         print(f"{COLORS['YELLOW']}NOTA: Esta prueba DEBE fallar con error 400{COLORS['RESET']}")
-        response = safe_request("POST", url, body, test_name="Asignar Hormigas - Cantidad Insuficiente (Debe Fallar)")
+        # Usar un lote_id único para esta prueba de error
+        lote_id_insuficiente = f"{lote_id}_INSUFICIENTE"
+        body_insuficiente = {
+            "hormigas_lote_id": lote_id_insuficiente,
+            "cantidad": 2  # Menor a las 3 requeridas
+        }
+        response = safe_request("POST", url, body_insuficiente, test_name="Asignar Hormigas - Cantidad Insuficiente (Debe Fallar)", expected_status=400)
         if response:
             data = print_response(response)
             if response.status_code == 400:
@@ -507,26 +538,50 @@ def main():
         time.sleep(1)
         
         # ========================================================================
-        # PASO 8: Si no se inició automáticamente, Iniciar la Tarea
+        # PASO 8: Verificar si la tarea ya está iniciada, si no, iniciarla
         # ========================================================================
-        print_step(8, "Iniciar la tarea (si no se inició automáticamente)")
-        url = f"{BASE_URL}/tareas/{tarea_id}/iniciar"
-        body = {
-            "hormigas_lote_id": lote_id
-        }
-        print_request("POST", url, body)
-        response = safe_request("POST", url, body, test_name="Iniciar Tarea")
-        if response:
-            data = print_response(response)
-            if response.status_code == 200:
-                print(f"{COLORS['GREEN']}[OK] Tarea iniciada exitosamente{COLORS['RESET']}")
-                print(f"{COLORS['GREEN']}  Estado: {data.get('estado', 'N/A') if data else 'N/A'}{COLORS['RESET']}")
-            elif response.status_code == 400:
-                print(f"{COLORS['YELLOW']}NOTA: La tarea ya estaba iniciada o hay un problema{COLORS['RESET']}")
-                if data:
-                    print(f"  Mensaje: {data.get('detail', 'N/A')}")
+        print_step(8, "Verificar estado e iniciar la tarea si es necesario")
+        # Primero verificar el estado actual
+        status_url = f"{BASE_URL}/tareas/{tarea_id}/status"
+        status_response = safe_request("GET", status_url, test_name="Verificar Estado Antes de Iniciar")
+        tarea_ya_iniciada = False
+        
+        if status_response and status_response.status_code == 200:
+            status_data = status_response.json()
+            estado_actual = status_data.get('estado', 'pendiente')
+            if estado_actual == 'en_proceso':
+                tarea_ya_iniciada = True
+                print(f"{COLORS['GREEN']}[OK] La tarea ya está iniciada (estado: en_proceso){COLORS['RESET']}")
+        
+        # Solo intentar iniciar si no está iniciada
+        if not tarea_ya_iniciada:
+            url = f"{BASE_URL}/tareas/{tarea_id}/iniciar"
+            body = {
+                "hormigas_lote_id": lote_id
+            }
+            print_request("POST", url, body)
+            response = safe_request("POST", url, body, test_name="Iniciar Tarea")
+            if response:
+                data = print_response(response)
+                if response.status_code == 200:
+                    print(f"{COLORS['GREEN']}[OK] Tarea iniciada exitosamente{COLORS['RESET']}")
+                    print(f"{COLORS['GREEN']}  Estado: {data.get('estado', 'N/A') if data else 'N/A'}{COLORS['RESET']}")
+                else:
+                    print(f"{COLORS['YELLOW']}NOTA: No se pudo iniciar la tarea (status: {response.status_code}){COLORS['RESET']}")
+                    if data:
+                        print(f"  Mensaje: {data.get('detail', 'N/A')}")
             else:
-                print(f"{COLORS['YELLOW']}NOTA: Status code {response.status_code}{COLORS['RESET']}")
+                print(f"{COLORS['YELLOW']}NOTA: No se pudo hacer la petición de inicio{COLORS['RESET']}")
+        else:
+            # Marcar como passed en Allure si ya estaba iniciada
+            save_allure_result(
+                test_name="Iniciar Tarea",
+                status="passed",
+                description=f"POST {BASE_URL}/tareas/{tarea_id}/iniciar",
+                request_data={"hormigas_lote_id": lote_id},
+                response_data={"status": "already_started", "message": "La tarea ya estaba iniciada"},
+                error=None
+            )
         
         time.sleep(1)
         

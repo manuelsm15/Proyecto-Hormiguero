@@ -224,26 +224,46 @@ class DatabaseManager:
         """Guarda una tarea en la base de datos."""
         try:
             cursor = self.connection.cursor()
+            
+            # Agregar columna hormigas_asignadas si no existe
+            try:
+                cursor.execute("ALTER TABLE tareas ADD COLUMN hormigas_asignadas INTEGER DEFAULT 0")
+                self.connection.commit()
+            except Exception:
+                # La columna ya existe, continuar
+                pass
+            
+            # Calcular cantidad de hormigas asignadas
+            cantidad_hormigas = len(tarea.hormigas_asignadas) if tarea.hormigas_asignadas else 0
+            
             cursor.execute("""
                 INSERT OR REPLACE INTO tareas 
-                (id, alimento_id, estado, fecha_inicio, fecha_fin, alimento_recolectado)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (id, alimento_id, estado, fecha_inicio, fecha_fin, alimento_recolectado, hormigas_asignadas)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 tarea.id,
                 tarea.alimento.id,
                 tarea.estado.value,
                 tarea.fecha_inicio.isoformat() if tarea.fecha_inicio else None,
                 tarea.fecha_fin.isoformat() if tarea.fecha_fin else None,
-                tarea.alimento_recolectado
+                tarea.alimento_recolectado,
+                cantidad_hormigas
             ))
             
             # Guardar asignaciones de hormigas
+            # Primero eliminar asignaciones antiguas (si existen)
+            cursor.execute("""
+                DELETE FROM asignaciones_hormiga_tarea 
+                WHERE tarea_id = ? AND (lote_id IS NULL OR lote_id = '')
+            """, (tarea.id,))
+            
+            # Luego insertar las nuevas asignaciones
             for hormiga in tarea.hormigas_asignadas:
                 cursor.execute("""
                     INSERT OR REPLACE INTO asignaciones_hormiga_tarea 
-                    (tarea_id, hormiga_id)
-                    VALUES (?, ?)
-                """, (tarea.id, hormiga.id))
+                    (tarea_id, hormiga_id, lote_id)
+                    VALUES (?, ?, ?)
+                """, (tarea.id, hormiga.id, tarea.hormigas_lote_id))
             
             self.connection.commit()
             return True
@@ -905,45 +925,98 @@ class SqlServerDatabaseManager:
     def guardar_tarea(self, tarea: TareaRecoleccion) -> bool:
         try:
             cursor = self.connection.cursor()
+            
+            # Agregar columna hormigas_asignadas si no existe
+            try:
+                self._exec(cursor, """
+                    IF NOT EXISTS (
+                        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+                        WHERE TABLE_NAME = 'Tareas' AND COLUMN_NAME = 'hormigas_asignadas'
+                    )
+                    ALTER TABLE dbo.Tareas ADD hormigas_asignadas INT DEFAULT 0
+                """)
+            except Exception:
+                # La columna ya existe o error al agregar, continuar
+                pass
+            
+            # Calcular cantidad de hormigas asignadas
+            cantidad_hormigas = len(tarea.hormigas_asignadas) if tarea.hormigas_asignadas else 0
+            
+            # Convertir alimento_id según el esquema
+            alimento_id_valor = tarea.alimento.id
+            if self.schema_type == "script":
+                # En esquema script, alimento_id es INT, necesitamos buscar el ID numérico
+                try:
+                    # Intentar convertir directamente si es numérico
+                    alimento_id_valor = int(tarea.alimento.id)
+                except (ValueError, TypeError):
+                    # Si no es numérico, buscar el alimento en BD para obtener su ID numérico
+                    alimento_bd = self.obtener_alimento_por_id(tarea.alimento.id)
+                    if alimento_bd and 'id' in alimento_bd:
+                        # El ID en BD puede ser numérico
+                        alimento_id_valor = alimento_bd['id']
+                    else:
+                        # Si no se encuentra, intentar usar el ID como está (puede fallar)
+                        print(f"Advertencia: No se pudo convertir alimento_id '{tarea.alimento.id}' a INT para esquema script")
+                        alimento_id_valor = tarea.alimento.id
+            
             # UPSERT manual - usar nombres de columnas correctos de SQL Server
-            # Columnas: id, alimento_id, estado, inicio, fin, cantidad_recolectada
+            # Columnas: id, alimento_id, estado, inicio, fin, cantidad_recolectada, hormigas_asignadas
             self._exec(cursor, """
                 UPDATE dbo.Tareas SET
                     alimento_id = ?,
                     estado = ?,
                     inicio = ?,
                     fin = ?,
-                    cantidad_recolectada = ?
+                    cantidad_recolectada = ?,
+                    hormigas_asignadas = ?
                 WHERE id = ?
             """, (
-                tarea.alimento.id,
+                alimento_id_valor,
                 tarea.estado.value,
                 tarea.fecha_inicio.isoformat() if tarea.fecha_inicio else None,
                 tarea.fecha_fin.isoformat() if tarea.fecha_fin else None,
                 tarea.alimento_recolectado,
+                cantidad_hormigas,
                 tarea.id,
             ))
             if cursor.rowcount == 0:
                 self._exec(cursor, """
-                    INSERT INTO dbo.Tareas (id, alimento_id, estado, inicio, fin, cantidad_recolectada)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO dbo.Tareas (id, alimento_id, estado, inicio, fin, cantidad_recolectada, hormigas_asignadas)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     tarea.id,
-                    tarea.alimento.id,
+                    alimento_id_valor,
                     tarea.estado.value,
                     tarea.fecha_inicio.isoformat() if tarea.fecha_inicio else None,
                     tarea.fecha_fin.isoformat() if tarea.fecha_fin else None,
                     tarea.alimento_recolectado,
+                    cantidad_hormigas
                 ))
 
-            # Asignaciones de hormigas (insertar si no existe)
+            # Asignaciones de hormigas
+            # Primero eliminar asignaciones antiguas sin lote_id (para mantener compatibilidad con lotes)
+            self._exec(cursor, """
+                DELETE FROM dbo.asignaciones_hormiga_tarea 
+                WHERE tarea_id = ? AND (lote_id IS NULL OR lote_id = '')
+            """, (tarea.id,))
+            
+            # Luego insertar las nuevas asignaciones
             for hormiga in tarea.hormigas_asignadas:
                 self._exec(cursor, """
                     IF NOT EXISTS (
-                        SELECT 1 FROM dbo.asignaciones_hormiga_tarea WHERE tarea_id = ? AND hormiga_id = ?
+                        SELECT 1 FROM dbo.asignaciones_hormiga_tarea 
+                        WHERE tarea_id = ? AND hormiga_id = ? AND (lote_id = ? OR (lote_id IS NULL AND ? IS NULL))
                     )
-                    INSERT INTO dbo.asignaciones_hormiga_tarea (tarea_id, hormiga_id) VALUES (?, ?)
-                """, (tarea.id, hormiga.id, tarea.id, hormiga.id))
+                    INSERT INTO dbo.asignaciones_hormiga_tarea (tarea_id, hormiga_id, lote_id) 
+                    VALUES (?, ?, ?)
+                """, (
+                    tarea.id, hormiga.id, tarea.hormigas_lote_id, tarea.hormigas_lote_id,
+                    tarea.id, hormiga.id, tarea.hormigas_lote_id
+                ))
+            
+            # Hacer commit de todos los cambios
+            cursor.commit()
             return True
         except Exception as e:
             self.last_error = str(e)
@@ -1076,6 +1149,34 @@ class SqlServerDatabaseManager:
                     alimento_recolectado=cantidad_recolectada
                 )
                 
+                # Obtener hormigas_asignadas directamente de la columna
+                try:
+                    self._exec(cursor, "SELECT hormigas_asignadas FROM dbo.Tareas WHERE id = ?", (tarea.id,))
+                    hormigas_row = cursor.fetchone()
+                    if hormigas_row and hormigas_row[0] is not None:
+                        cantidad_hormigas_bd = int(hormigas_row[0])
+                        # Si hay hormigas asignadas en BD pero no en memoria, crear hormigas genéricas
+                        if cantidad_hormigas_bd > 0 and len(tarea.hormigas_asignadas) == 0:
+                            # Cargar asignaciones para obtener los IDs de hormigas
+                            self._exec(cursor, """
+                                SELECT hormiga_id FROM dbo.asignaciones_hormiga_tarea 
+                                WHERE tarea_id = ?
+                            """, (tarea.id,))
+                            asignaciones = cursor.fetchall()
+                            for asign in asignaciones:
+                                hormiga_id = asign[0]
+                                # Crear hormiga genérica (sin necesidad de que esté en tabla hormigas)
+                                from ..models.hormiga import Hormiga
+                                from ..models.estado_hormiga import EstadoHormiga
+                                hormiga = Hormiga(
+                                    id=str(hormiga_id),
+                                    estado=EstadoHormiga.DISPONIBLE,
+                                    capacidad_carga=5
+                                )
+                                tarea.agregar_hormiga(hormiga)
+                except Exception as e:
+                    print(f"[DEBUG] Error cargando hormigas_asignadas: {e}")
+                
                 # Obtener lote_id de la tarea
                 try:
                     self._exec(cursor, """
@@ -1086,12 +1187,14 @@ class SqlServerDatabaseManager:
                     if lote_row:
                         lote_id = lote_row[0]
                         tarea.hormigas_lote_id = lote_id
-                        # Obtener hormigas desde el lote
-                        self._exec(cursor, """
-                            SELECT h.* FROM dbo.hormigas h
-                            JOIN dbo.asignaciones_hormiga_tarea aht ON h.id = aht.hormiga_id
-                            WHERE aht.lote_id = ?
-                        """, (lote_id,))
+                        # Si aún no hay hormigas cargadas, intentar cargarlas desde el lote
+                        if len(tarea.hormigas_asignadas) == 0:
+                            # Obtener hormigas desde el lote (si existen en tabla hormigas)
+                            self._exec(cursor, """
+                                SELECT h.* FROM dbo.hormigas h
+                                JOIN dbo.asignaciones_hormiga_tarea aht ON h.id = aht.hormiga_id
+                                WHERE aht.lote_id = ?
+                            """, (lote_id,))
                     else:
                         # Fallback: obtener hormigas directamente por tarea_id
                         self._exec(cursor, """
@@ -1262,12 +1365,23 @@ class SqlServerDatabaseManager:
                 return False
             
             cursor = self.connection.cursor()
+            # Verificar si el lote ya existe
+            self._exec(cursor, "SELECT COUNT(*) FROM dbo.lotes_hormigas WHERE lote_id = ?", (lote_id,))
+            existe = cursor.fetchone()[0] > 0
+            
+            if existe:
+                self.last_error = f"Lote {lote_id} ya existe"
+                print(f"Lote {lote_id} ya existe en BD")
+                return False
+            
+            # Insertar el lote
             self._exec(cursor, """
-                IF NOT EXISTS (SELECT 1 FROM dbo.lotes_hormigas WHERE lote_id = ?)
                 INSERT INTO dbo.lotes_hormigas 
                 (lote_id, tarea_id, cantidad_hormigas_enviadas, cantidad_hormigas_requeridas, estado)
                 VALUES (?, ?, ?, ?, 'pendiente')
-            """, (lote_id, lote_id, tarea_id, cantidad_enviada, cantidad_requerida))
+            """, (lote_id, tarea_id, cantidad_enviada, cantidad_requerida))
+            
+            print(f"Lote {lote_id} creado exitosamente en BD para tarea {tarea_id}")
             return True
         except Exception as e:
             self.last_error = str(e)

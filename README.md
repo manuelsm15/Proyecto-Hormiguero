@@ -104,9 +104,9 @@ docker build -f Dockerfile.railway -t subsistema-recoleccion .
 docker run -p 8000:8000 subsistema-recoleccion
 ```
 
-### 🚀 Despliegue en Railway
+### 🚀 Despliegue
 
-#### Configuración automática
+#### Despliegue en Railway
 ```bash
 # Login en Railway
 railway login
@@ -120,6 +120,26 @@ railway up
 # Obtener URL
 railway domain
 ```
+
+#### Despliegue en Cloudflare
+Ver la guía completa en [DEPLOY_CLOUDFLARE.md](DEPLOY_CLOUDFLARE.md)
+
+**Opciones disponibles:**
+1. **Cloudflare + Railway** (Recomendado): Despliega backend en Railway y usa Cloudflare como proxy/CDN
+2. **Cloudflare Pages**: Para sitios estáticos
+3. **Cloudflare Tunnel**: Para exponer backend local/privado
+
+**Deployment rápido con scripts:**
+```bash
+# Windows (PowerShell)
+.\cloudflare_deploy.ps1
+
+# Linux/Mac
+chmod +x cloudflare_deploy.sh
+./cloudflare_deploy.sh
+```
+
+**Account ID de Cloudflare**: `719189be500e460aed972c47cd97b209`
 
 ### 📊 APIs Disponibles
 

@@ -1,0 +1,12 @@
+{
+  "name": "hormiguero",
+  "version": "1.0.0",
+  "description": "Subsistema de Recolección de Alimentos - Cloudflare Pages",
+  "scripts": {
+    "build": "pip install -r requirements.txt"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
+
