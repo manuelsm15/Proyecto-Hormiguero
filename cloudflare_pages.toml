@@ -2,11 +2,12 @@
 # Este archivo se usa cuando despliegas como Cloudflare Pages
 
 [build]
-command = "pip install --upgrade pip setuptools wheel && pip install -r requirements.txt"
+# Usar script de build que maneja Python 3.12, o fallback a pip directo
+command = "chmod +x build.sh && ./build.sh || pip install --upgrade pip setuptools wheel && pip install -r requirements.txt"
 publish = "."
 
 [build.environment]
-PYTHON_VERSION = "3.12"
+PYTHON_VERSION = "3.12.10"
 NODE_VERSION = "18"
-PYTHON = "3.12"
+PYTHON = "3.12.10"
 
