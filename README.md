@@ -174,6 +174,6 @@ Este proyecto es parte del curso de Universidad Cenfotec.
 
 ### 🔗 Enlaces
 - **GitHub**: https://github.com/manuelsm15/Proyecto-Hormiguero
-- **Railway**: [https://TU_PROYECTO-production.up.railway.app](https://proyecto-hormiguero-production.up.railway.app/docs#/)
-- **Documentación**: https://TU_PROYECTO-production.up.railway.app/docs
+- **Railway**: https://proyecto-hormiguero-production.up.railway.app/docs#
+- **Documentación**: https://proyecto-hormiguero-production.up.railway.app/docs#
 
