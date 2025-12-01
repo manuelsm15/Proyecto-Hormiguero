@@ -1,13 +1,24 @@
 # Configuración para Cloudflare Pages
 # Este archivo se usa cuando despliegas como Cloudflare Pages
+#
+# IMPORTANTE: Cloudflare Pages NO ejecuta aplicaciones Python directamente.
+# Solo sirve archivos estáticos. Para APIs FastAPI, usa Railway + Cloudflare.
+#
+# Si ves el error "Executing user deploy command: npx wrangler deploy",
+# ve al Dashboard de Cloudflare y elimina cualquier "Deploy command" configurado.
 
 [build]
-# Usar script de build que maneja Python 3.12, o fallback a pip directo
-command = "chmod +x build.sh && ./build.sh || pip install --upgrade pip setuptools wheel && pip install -r requirements.txt"
+# Solo instalar dependencias - Cloudflare Pages maneja el deploy automáticamente
+# NO configures un "Deploy command" en el dashboard
+command = "pip install --upgrade pip setuptools wheel && pip install -r requirements.txt"
 publish = "."
 
 [build.environment]
 PYTHON_VERSION = "3.12.10"
 NODE_VERSION = "18"
 PYTHON = "3.12.10"
+
+# NOTA: No hay sección [deploy] porque Cloudflare Pages maneja el deploy automáticamente
+# Si necesitas un comando de deploy personalizado, probablemente estás usando
+# la plataforma incorrecta. Considera Railway para APIs Python.
 

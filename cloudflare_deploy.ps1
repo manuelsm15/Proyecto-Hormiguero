@@ -23,3 +23,4 @@ wrangler pages deploy . --project-name=hormiguero
 Write-Host "✅ Deployment completado!" -ForegroundColor Green
 Write-Host "🌐 Revisa tu proyecto en: https://hormiguero.pages.dev" -ForegroundColor Cyan
 
+

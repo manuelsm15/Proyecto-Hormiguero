@@ -111,3 +111,4 @@ Para una API FastAPI, **NO uses Cloudflare Pages directamente**. En su lugar:
 
 Esto es más eficiente y evita problemas de compatibilidad.
 
+

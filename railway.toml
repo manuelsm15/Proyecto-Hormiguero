@@ -3,7 +3,8 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile.railway"
 
 [deploy]
-startCommand = "python railway_main.py"
+# NO configurar startCommand aquí - usar ENTRYPOINT en Dockerfile
+# startCommand se ignora cuando hay ENTRYPOINT en Dockerfile
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

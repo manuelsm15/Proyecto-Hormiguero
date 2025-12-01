@@ -94,3 +94,4 @@ pytest tests/test_api_controller.py tests/test_api_cobertura_missing.py --cov=sr
 - Los endpoints de debug requieren acceso a la BD, por lo que algunos tests pueden necesitar mocks más complejos
 
 
+

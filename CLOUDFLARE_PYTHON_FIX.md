@@ -72,3 +72,4 @@ curl https://tu-dominio.com/health
 
 **Nota**: Si Cloudflare Pages sigue usando Python 3.14, considera usar **Railway + Cloudflare** en su lugar, que es más adecuado para APIs FastAPI.
 
+

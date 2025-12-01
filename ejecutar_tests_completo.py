@@ -39,3 +39,4 @@ print(f"  Tests con error: {tests_error}")
 print(f"\nResultados guardados en: resultados_tests_cobertura.txt")
 
 
+

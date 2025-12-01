@@ -30,3 +30,4 @@ with open("errores_tests.txt", "w", encoding="utf-8") as f:
 print("\nErrores guardados en: errores_tests.txt")
 
 
+
