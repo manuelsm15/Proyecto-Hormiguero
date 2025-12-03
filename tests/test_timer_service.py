@@ -180,3 +180,93 @@ class TestTimerService:
         assert len(timer_service.tareas_en_proceso) == 0
         assert len(timer_service.timer_tasks) == 0
 
+    @pytest.mark.asyncio
+    async def test_callbacks_se_ejecutan_en_notify(self):
+        """Debe ejecutar todos los callbacks registrados al notificar."""
+        timer_service = TimerService()
+
+        # Crear tarea simple
+        alimento = Alimento(
+            id="A1",
+            nombre="Fruta",
+            cantidad_hormigas_necesarias=1,
+            puntos_stock=5,
+            tiempo_recoleccion=1,
+        )
+        tarea = TareaRecoleccion(id="tarea_cb", alimento=alimento)
+
+        eventos = []
+
+        async def callback_ok(t, evento):
+            eventos.append((t.id, evento))
+
+        timer_service.add_callback(callback_ok)
+
+        # Act
+        await timer_service._notify_callbacks(tarea, "iniciada")
+
+        # Assert
+        assert eventos == [("tarea_cb", "iniciada")]
+
+    @pytest.mark.asyncio
+    async def test_callbacks_con_error_no_rompen_notify(self, capsys):
+        """Si un callback lanza error, los demás siguen ejecutándose y no se propaga."""
+        timer_service = TimerService()
+
+        alimento = Alimento(
+            id="A1",
+            nombre="Fruta",
+            cantidad_hormigas_necesarias=1,
+            puntos_stock=5,
+            tiempo_recoleccion=1,
+        )
+        tarea = TareaRecoleccion(id="tarea_cb_error", alimento=alimento)
+
+        eventos = []
+
+        async def callback_ok(t, evento):
+            eventos.append(("ok", t.id, evento))
+
+        async def callback_bad(t, evento):
+            raise RuntimeError("Fallo en callback")
+
+        timer_service.add_callback(callback_bad)
+        timer_service.add_callback(callback_ok)
+
+        # Act: no debe lanzar excepción
+        await timer_service._notify_callbacks(tarea, "completada")
+
+        # Assert: el callback bueno se ejecutó
+        assert ("ok", "tarea_cb_error", "completada") in eventos
+
+    @pytest.mark.asyncio
+    async def test_iniciar_tarea_dos_veces_devuelve_false(self):
+        """Si se intenta iniciar dos veces la misma tarea, la segunda vez devuelve False."""
+        timer_service = TimerService()
+
+        alimento = Alimento(
+            id="A1",
+            nombre="Fruta",
+            cantidad_hormigas_necesarias=1,
+            puntos_stock=10,
+            tiempo_recoleccion=1,
+        )
+        hormiga = Hormiga(id="H1", capacidad_carga=5, estado=EstadoHormiga.DISPONIBLE)
+        tarea = TareaRecoleccion(id="tarea_dup", alimento=alimento)
+        tarea.agregar_hormiga(hormiga)
+
+        ok_primera = await timer_service.iniciar_tarea_timer(tarea)
+        ok_segunda = await timer_service.iniciar_tarea_timer(tarea)
+
+        assert ok_primera is True
+        assert ok_segunda is False
+
+    @pytest.mark.asyncio
+    async def test_cancelar_tarea_inexistente_devuelve_false(self):
+        """Cancelar una tarea que no existe debe devolver False y no fallar."""
+        timer_service = TimerService()
+
+        resultado = await timer_service.cancelar_tarea("no_existe")
+
+        assert resultado is False
+

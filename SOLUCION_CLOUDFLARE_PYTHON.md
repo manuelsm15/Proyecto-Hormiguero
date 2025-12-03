@@ -118,3 +118,5 @@ El problema era que `pydantic==2.5.0` no era compatible con Python 3.14, pero `p
 
 **Última actualización**: 2025-11-27
 
+
+

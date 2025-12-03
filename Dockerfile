@@ -26,4 +26,6 @@ RUN mkdir -p allure-results allure-report htmlcov
 EXPOSE 8000
 
 # Comando para iniciar la aplicación
-CMD ["python", "main.py"]
+# Usa railway_main.py para producción (mejor optimizado)
+# O main.py para desarrollo local
+CMD ["python", "railway_main.py"]

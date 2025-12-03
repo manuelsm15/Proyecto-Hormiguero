@@ -48,13 +48,20 @@ app = create_app(entorno_service, comunicacion_service)
 
 def main():
     """Función principal para ejecutar la aplicación."""
+    # Obtener configuración de variables de entorno (compatible con Railway/Cloudflare)
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", 8000))
+    
+    # reload solo en desarrollo, nunca en producción
+    reload = os.getenv("RELOAD", "false").lower() == "true"
+    
     # Ejecutar la aplicación
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        host=host,
+        port=port,
+        reload=reload,
+        log_level=os.getenv("LOG_LEVEL", "info")
     )
 
 

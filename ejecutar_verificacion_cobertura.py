@@ -100,3 +100,5 @@ print(f"\n✅ Resultados guardados en: {archivo_resultados}")
 print("📊 Revisa el reporte HTML en: htmlcov/index.html")
 
 
+
+

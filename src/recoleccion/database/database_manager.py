@@ -960,6 +960,9 @@ class SqlServerDatabaseManager:
                         print(f"Advertencia: No se pudo convertir alimento_id '{tarea.alimento.id}' a INT para esquema script")
                         alimento_id_valor = tarea.alimento.id
             
+            # Obtener el valor del estado como string
+            estado_valor = tarea.estado.value if hasattr(tarea.estado, 'value') else str(tarea.estado)
+            
             # UPSERT manual - usar nombres de columnas correctos de SQL Server
             # Columnas: id, alimento_id, estado, inicio, fin, cantidad_recolectada, hormigas_asignadas
             self._exec(cursor, """
@@ -973,26 +976,30 @@ class SqlServerDatabaseManager:
                 WHERE id = ?
             """, (
                 alimento_id_valor,
-                tarea.estado.value,
+                estado_valor,
                 tarea.fecha_inicio.isoformat() if tarea.fecha_inicio else None,
                 tarea.fecha_fin.isoformat() if tarea.fecha_fin else None,
                 tarea.alimento_recolectado,
                 cantidad_hormigas,
                 tarea.id,
             ))
-            if cursor.rowcount == 0:
+            rows_updated = cursor.rowcount
+            if rows_updated > 0:
+                print(f"[SQL Server] Tarea {tarea.id} actualizada en BD. Estado: {estado_valor}, Fecha inicio: {tarea.fecha_inicio}, Fecha fin: {tarea.fecha_fin}")
+            if rows_updated == 0:
                 self._exec(cursor, """
                     INSERT INTO dbo.Tareas (id, alimento_id, estado, inicio, fin, cantidad_recolectada, hormigas_asignadas)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     tarea.id,
                     alimento_id_valor,
-                    tarea.estado.value,
+                    estado_valor,
                     tarea.fecha_inicio.isoformat() if tarea.fecha_inicio else None,
                     tarea.fecha_fin.isoformat() if tarea.fecha_fin else None,
                     tarea.alimento_recolectado,
                     cantidad_hormigas
                 ))
+                print(f"[SQL Server] Tarea {tarea.id} insertada en BD. Estado: {estado_valor}")
 
             # Asignaciones de hormigas
             # Primero eliminar asignaciones antiguas sin lote_id (para mantener compatibilidad con lotes)
@@ -1279,10 +1286,19 @@ class SqlServerDatabaseManager:
                 "UPDATE dbo.Tareas SET estado = ? WHERE id = ?",
                 (nuevo_estado, tarea_id),
             )
-            return cursor.rowcount > 0
+            # Hacer commit explícito para asegurar que se persista
+            cursor.commit()
+            rows_updated = cursor.rowcount > 0
+            if rows_updated:
+                print(f"Estado de tarea {tarea_id} actualizado a '{nuevo_estado}' en BD")
+            else:
+                print(f"Advertencia: No se actualizó ninguna fila para tarea {tarea_id} (puede que no exista)")
+            return rows_updated
         except Exception as e:
             self.last_error = str(e)
             print(f"Error actualizando estado de tarea (SQL Server): {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def guardar_mensaje(self, mensaje: Mensaje) -> bool:
@@ -1554,7 +1570,14 @@ class SqlServerDatabaseManager:
 # Instancia global del gestor de base de datos, configurable por variable de entorno
 DB_ENGINE = (os.getenv("DB_ENGINE") or "").lower()
 
-def _try_sqlserver_autodetect() -> Optional[SqlServerDatabaseManager]:
+
+def _try_sqlserver_autodetect() -> SqlServerDatabaseManager:
+    """
+    Intenta crear un SqlServerDatabaseManager.
+
+    A diferencia de la versión anterior, **NO** hace fallback silencioso a SQLite.
+    Si falla la conexión, lanza la excepción para que el error sea visible.
+    """
     server = os.getenv("SQLSERVER_SERVER", "SHIRORYUU")
     database = os.getenv("SQLSERVER_DATABASE", "Hormiguero")
     # Preferir Driver 17 (común en tu equipo), luego 18
@@ -1562,18 +1585,17 @@ def _try_sqlserver_autodetect() -> Optional[SqlServerDatabaseManager]:
     os.environ.setdefault("SQLSERVER_ODBC_DRIVER", driver)
     os.environ.setdefault("SQLSERVER_ENCRYPT", os.getenv("SQLSERVER_ENCRYPT", "no"))
     os.environ.setdefault("SQLSERVER_TRUST_SERVER_CERT", os.getenv("SQLSERVER_TRUST_SERVER_CERT", "yes"))
-    try:
-        return SqlServerDatabaseManager(server=server, database=database)
-    except Exception as e:
-        print(f"Autodetección SQL Server falló: {e}")
-        return None
+    return SqlServerDatabaseManager(server=server, database=database)
 
-db_manager = None
-if DB_ENGINE == "sqlserver":
-    db_manager = _try_sqlserver_autodetect() or DatabaseManager()
-elif DB_ENGINE == "sqlite":
+
+# Instancia global ÚNICA del gestor de base de datos
+#
+# Regla:
+# - Si se indica DB_ENGINE=sqlite → se usa solo SQLite (para tests locales).
+# - En cualquier otro caso (incluido por defecto) → se usa solo SQL Server.
+#   Ya no hay fallback silencioso a SQLite, para evitar confusiones como la de A1/A2/A3.
+if DB_ENGINE == "sqlite":
     db_manager = DatabaseManager()
 else:
-    # Sin DB_ENGINE: intentar SQL Server primero, si falla caer a SQLite
-    db_manager = _try_sqlserver_autodetect() or DatabaseManager()
+    db_manager = _try_sqlserver_autodetect()
 

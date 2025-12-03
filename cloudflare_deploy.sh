@@ -21,3 +21,5 @@ wrangler pages deploy . --project-name=hormiguero
 echo "✅ Deployment completado!"
 echo "🌐 Revisa tu proyecto en: https://hormiguero.pages.dev"
 
+
+

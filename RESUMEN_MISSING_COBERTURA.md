@@ -77,3 +77,5 @@ Se creó el archivo `tests/test_api_cobertura_missing.py` con **más de 50 tests
 - `tests/test_api_cobertura_missing.py`: Tests específicos para cubrir líneas faltantes
 
 
+
+

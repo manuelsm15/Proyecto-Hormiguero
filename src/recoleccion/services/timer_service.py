@@ -125,7 +125,7 @@ class TimerService:
     
     async def cancelar_tarea(self, tarea_id: str) -> bool:
         """
-        Cancela una tarea en proceso.
+        Cancela una tarea en proceso y la resetea completamente.
         
         Args:
             tarea_id: ID de la tarea a cancelar
@@ -143,21 +143,28 @@ class TimerService:
         # Obtener tarea
         tarea = self.tareas_en_proceso.get(tarea_id)
         if tarea:
-            # Cambiar estado a PAUSADA
-            tarea.estado = EstadoTarea.PAUSADA
+            # Cambiar estado a CANCELADA (no PAUSADA)
+            tarea.estado = EstadoTarea.CANCELADA
+            
+            # RESETEAR: Limpiar fechas de inicio y fin
+            tarea.fecha_inicio = None
+            tarea.fecha_fin = None
+            
+            # RESETEAR: Limpiar alimento recolectado
+            tarea.alimento_recolectado = 0
             
             # Cambiar estado de hormigas a DISPONIBLE
             for hormiga in tarea.hormigas_asignadas:
                 hormiga.cambiar_estado(EstadoHormiga.DISPONIBLE)
             
-            # Notificar cancelación
+            # Notificar cancelación (esto permitirá que el callback actualice el alimento en BD)
             await self._notify_callbacks(tarea, "cancelada")
         
         # Limpiar
         self.tareas_en_proceso.pop(tarea_id, None)
         self.timer_tasks.pop(tarea_id, None)
         
-        logger.info(f"Tarea {tarea_id} cancelada")
+        logger.info(f"Tarea {tarea_id} cancelada y reseteada")
         return True
     
     def get_tareas_en_proceso(self) -> List[TareaRecoleccion]:

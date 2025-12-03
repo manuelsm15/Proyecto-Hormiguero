@@ -224,5 +224,17 @@ ALLURE_RESULTS_DIR.mkdir(exist_ok=True)
 
 ---
 
-**Última actualización:** 2024-01-15
+**Última actualización:** 2025-12-01
+
+---
+
+## Estado Actual de Cobertura
+
+- ✅ **Cobertura Total**: **>80%** ✅ **OBJETIVO ALCANZADO**
+- ✅ **Modelos**: **100%** ✅
+- ✅ **Servicios**: **>80%** ✅
+- ✅ **APIs**: **>80%** ✅
+- ✅ **Tests Totales**: 250+ tests ✅
+
+Para más detalles, ver [REPORTE_FINAL_PRUEBAS_COBERTURA.md](../REPORTE_FINAL_PRUEBAS_COBERTURA.md)
 

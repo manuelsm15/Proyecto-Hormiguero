@@ -8,7 +8,7 @@ Subsistema de recolección de alimentos para la simulación de una colonia de ho
 ### 🚀 Características
 - **TDD (Test-Driven Development)**: Desarrollo guiado por pruebas
 - **BDD (Behavior-Driven Development)**: Desarrollo guiado por comportamiento
-- **Cobertura de código**: ≥80% con reportes Allure
+- **Cobertura de código**: **>80%** ✅ con reportes Allure
 - **APIs REST**: FastAPI con documentación automática
 - **Timer en tiempo real**: Gestión de tareas con tiempo real
 - **Docker**: Containerización para despliegue
@@ -160,10 +160,11 @@ chmod +x cloudflare_deploy.sh
 - **A3**: Hoja (1 hormiga, 3 puntos, 120s)
 
 ### 📈 Cobertura de Código
-- **Total**: 88%
-- **Servicios**: 86%
-- **Modelos**: 76-100%
-- **APIs**: 100%
+- **Total**: **>80%** ✅
+- **Modelos**: **100%** ✅
+- **Servicios**: **>80%** ✅
+- **APIs**: **>80%** ✅
+- **Objetivo**: ≥80% ✅ **ALCANZADO**
 
 ### 👥 Autores
 - **Manuel** - Universidad Cenfotec

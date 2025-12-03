@@ -13,6 +13,7 @@ from src.recoleccion.models.hormiga import Hormiga
 from src.recoleccion.models.estado_hormiga import EstadoHormiga
 from src.recoleccion.models.estado_tarea import EstadoTarea
 from src.recoleccion.models.tipo_mensaje import TipoMensaje
+from src.recoleccion.models.tarea_recoleccion import TareaRecoleccion
 
 
 class TestRecoleccionService:
@@ -423,3 +424,68 @@ class TestRecoleccionService:
             await recoleccion_service.crear_tarea_recoleccion(
                 "tarea_001", alimento_no_disponible
             )
+
+    @pytest.mark.asyncio
+    @patch("src.recoleccion.services.recoleccion_service.persistence_service")
+    async def test_on_tarea_completada_mueve_listas_y_persiste(
+        self,
+        mock_persistence,
+        recoleccion_service,
+        alimento_ejemplo,
+        hormiga_ejemplo,
+    ):
+        """Debe mover la tarea de activas a completadas y persistir en BD."""
+        # Arrange
+        tarea = await recoleccion_service.crear_tarea_recoleccion(
+            "tarea_001", alimento_ejemplo
+        )
+        # Simular que estaba activa
+        recoleccion_service.tareas_activas = [tarea]
+        recoleccion_service.tareas_completadas = []
+
+        # Configurar mocks de persistencia
+        mock_persistence.guardar_tarea = AsyncMock(return_value=True)
+        mock_persistence.actualizar_estado_tarea = AsyncMock(return_value=True)
+        mock_persistence.guardar_evento = AsyncMock(return_value=True)
+
+        # Act
+        await recoleccion_service._on_tarea_completada(tarea, "completada")
+
+        # Assert: listas actualizadas
+        assert tarea not in recoleccion_service.tareas_activas
+        assert tarea in recoleccion_service.tareas_completadas
+
+        # Assert: llamadas a persistencia
+        mock_persistence.guardar_tarea.assert_awaited_once_with(tarea)
+        mock_persistence.actualizar_estado_tarea.assert_awaited_once_with(
+            tarea.id, tarea.estado
+        )
+        mock_persistence.guardar_evento.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @patch("src.recoleccion.services.recoleccion_service.persistence_service")
+    async def test_on_tarea_completada_excepcion_en_persistencia_no_rompe_callback(
+        self,
+        mock_persistence,
+        recoleccion_service,
+        alimento_ejemplo,
+    ):
+        """Si la persistencia lanza excepción, el callback no debe propagarla."""
+        # Arrange
+        tarea = TareaRecoleccion(id="tarea_002", alimento=alimento_ejemplo)
+        recoleccion_service.tareas_activas = [tarea]
+        recoleccion_service.tareas_completadas = []
+
+        async def _raise(*args, **kwargs):
+            raise Exception("Fallo forzado en BD")
+
+        mock_persistence.guardar_tarea = AsyncMock(side_effect=_raise)
+        mock_persistence.actualizar_estado_tarea = AsyncMock(side_effect=_raise)
+        mock_persistence.guardar_evento = AsyncMock(side_effect=_raise)
+
+        # Act: no debe lanzar excepción
+        await recoleccion_service._on_tarea_completada(tarea, "completada")
+
+        # Assert: aun así la tarea se mueve a completadas
+        assert tarea not in recoleccion_service.tareas_activas
+        assert tarea in recoleccion_service.tareas_completadas

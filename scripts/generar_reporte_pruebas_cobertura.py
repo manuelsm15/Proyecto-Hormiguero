@@ -122,3 +122,5 @@ print(f"Estado: {'✅ CUMPLE' if cobertura_total >= 80 else '⚠️ MEJORABLE'}"
 
 
 
+
+

@@ -12,6 +12,7 @@ from ..services.entorno_service import EntornoService
 from ..services.comunicacion_service import ComunicacionService
 from ..models.alimento import Alimento
 from ..models.tarea_recoleccion import TareaRecoleccion
+from ..models.estado_tarea import EstadoTarea
 
 class CrearTareaRequest(BaseModel):
     tarea_id: Optional[str] = None
@@ -165,50 +166,39 @@ def create_app(
             }
     
     @app.get(
-        "/alimentos", 
-        response_model=List[Alimento], 
+        "/alimentos",
+        response_model=List[Alimento],
         tags=["Alimentos"],
         responses={500: RESPONSES[500]}
     )
     async def consultar_alimentos(
-        zona_id: Optional[int] = Query(None, description="ID de zona para filtrar recursos"),
-        estado: Optional[str] = Query(None, description="Estado del recurso: disponible, en_proceso, recolectado")
+        zona_id: Optional[int] = Query(None, description="(Reservado) ID de zona para filtrar recursos"),
+        estado: Optional[str] = Query(
+            None,
+            description=(
+                "(Reservado) Estado del recurso: disponible, en_proceso, recolectado. "
+                "Por ahora el endpoint siempre devuelve TODOS los alimentos de la base de datos."
+            ),
+        ),
     ):
         """
-        Consulta los alimentos/recursos disponibles en el entorno.
-        
-        Puede filtrar por:
-        - zona_id: ID de la zona donde se encuentran los recursos
-        - estado: Estado del recurso (disponible, en_proceso, recolectado)
-        
-        Si no se especifica estado, por defecto solo devuelve recursos disponibles.
+        Consulta los alimentos/recursos **directamente desde la base de datos**.
+
+        IMPORTANTE:
+        - Siempre devuelve TODOS los registros de la tabla `Alimentos` que pueda mapear,
+          sin filtrar por estado ni disponibilidad.
+        - De esta forma, el resultado debe coincidir con el conteo `alimentos_en_bd`
+          que muestra el endpoint `/debug/db`.
         """
         try:
-            # Intentar usar el servicio de entorno primero (para tests con mocks)
-            alimentos = None
-            try:
-                if await entorno_service.is_disponible():
-                    alimentos = await recoleccion_service.consultar_alimentos_disponibles(
-                        zona_id=zona_id,
-                        estado=estado
-                    )
-            except Exception:
-                # Si falla el servicio de entorno, continuar con la BD
-                pass
-            
-            # Si no se obtuvieron del servicio de entorno, usar la base de datos
-            if alimentos is None:
-                from ..services.persistence_service import persistence_service
-                alimentos = await persistence_service.obtener_alimentos()
-                # Aplicar filtros si vienen
-                if estado:
-                    estado_l = estado.lower()
-                    if estado_l in ("disponible", "disponibles"):
-                        alimentos = [a for a in alimentos if a.disponible]
-                    elif estado_l in ("recolectado", "no_disponible"):
-                        alimentos = [a for a in alimentos if not a.disponible]
-            # zona_id actualmente no está modelado en la tabla alimentos; se ignora si viene
-            return alimentos
+            # Usar exactamente la misma conexión y lógica que el POST de alimentos:
+            # a través de PersistenceService, que a su vez usa el db_manager global.
+            from ..services.persistence_service import persistence_service
+
+            alimentos: List[Alimento] = await persistence_service.obtener_alimentos()
+
+            # Por ahora NO se aplica ningún filtro por estado ni por zona.
+            return alimentos or []
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error al consultar alimentos: {str(e)}")
 
@@ -807,7 +797,11 @@ def create_app(
             servicio_a_usar = getattr(app.state, 'recoleccion_service', None) or recoleccion_service
             
             # Verificar y completar tareas automáticamente si es necesario
+            # Validación: fecha_inicio + tiempo_recoleccion <= fecha_actual
             tareas_completadas_auto = []
+            from datetime import datetime
+            ahora = datetime.now()
+            
             for t in tareas:
                 # Si la tarea está en memoria, verificar con el servicio
                 tarea_en_memoria = None
@@ -819,17 +813,32 @@ def create_app(
                 # Si está en memoria, usar esa (puede estar más actualizada)
                 tarea_a_verificar = tarea_en_memoria if tarea_en_memoria else t
                 
-                # Verificar si debe completarse automáticamente
-                completada = await servicio_a_usar.verificar_y_completar_tarea_por_tiempo(tarea_a_verificar)
-                if completada:
-                    tareas_completadas_auto.append(t.id)
-                    # Si estaba en memoria, actualizar la referencia
-                    if tarea_en_memoria:
-                        t = tarea_en_memoria
-                    else:
-                        # Recargar desde BD para obtener el estado actualizado
-                        tareas_actualizadas = await persistence_service.obtener_tareas()
-                        t = next((ta for ta in tareas_actualizadas if ta.id == t.id), t)
+                # Verificar si debe completarse automáticamente por tiempo
+                estado_valor = tarea_a_verificar.estado.value if hasattr(tarea_a_verificar.estado, 'value') else str(tarea_a_verificar.estado)
+                if estado_valor == "en_proceso" and tarea_a_verificar.fecha_inicio:
+                    tiempo_transcurrido = (ahora - tarea_a_verificar.fecha_inicio).total_seconds()
+                    tiempo_recoleccion = tarea_a_verificar.alimento.tiempo_recoleccion
+                    
+                    # Si el tiempo transcurrido es mayor o igual al tiempo de recolección, completar automáticamente
+                    if tiempo_transcurrido >= tiempo_recoleccion:
+                        # Ejecutar el procesamiento completo de la tarea (completar y actualizar alimento)
+                        completada = await servicio_a_usar.verificar_y_completar_tarea_por_tiempo(tarea_a_verificar)
+                        if completada:
+                            tareas_completadas_auto.append(t.id)
+                            # Asegurar que el alimento se actualizó correctamente
+                            try:
+                                await persistence_service.actualizar_alimento_disponibilidad(tarea_a_verificar.alimento.id, False)
+                                print(f"Tarea {t.id} completada automáticamente desde status. Alimento {tarea_a_verificar.alimento.id} actualizado.")
+                            except Exception as e:
+                                print(f"Advertencia: No se pudo actualizar alimento {tarea_a_verificar.alimento.id} al completar tarea: {e}")
+                            
+                            # Si estaba en memoria, actualizar la referencia
+                            if tarea_en_memoria:
+                                t = tarea_en_memoria
+                            else:
+                                # Recargar desde BD para obtener el estado actualizado
+                                tareas_actualizadas = await persistence_service.obtener_tareas()
+                                t = next((ta for ta in tareas_actualizadas if ta.id == t.id), t)
             
             # Recargar tareas después de verificar completados automáticos
             if tareas_completadas_auto:
@@ -918,16 +927,32 @@ def create_app(
                 )
             
             # Verificar si la tarea debe completarse automáticamente por tiempo
+            # Validación: fecha_inicio + tiempo_recoleccion <= fecha_actual
             completada_auto = False
             estado_valor = tarea.estado.value if hasattr(tarea.estado, 'value') else str(tarea.estado)
             if estado_valor == "en_proceso" and tarea.fecha_inicio:
-                completada_auto = await servicio_a_usar.verificar_y_completar_tarea_por_tiempo(tarea)
-                if completada_auto:
-                    # Recargar desde BD para obtener el estado actualizado
-                    tareas_actualizadas = await persistence_service.obtener_tareas()
-                    tarea_actualizada = next((t for t in tareas_actualizadas if t.id == tarea.id), None)
-                    if tarea_actualizada:
-                        tarea = tarea_actualizada
+                from datetime import datetime, timedelta
+                ahora = datetime.now()
+                tiempo_transcurrido = (ahora - tarea.fecha_inicio).total_seconds()
+                tiempo_recoleccion = tarea.alimento.tiempo_recoleccion
+                
+                # Si el tiempo transcurrido es mayor o igual al tiempo de recolección, completar automáticamente
+                if tiempo_transcurrido >= tiempo_recoleccion:
+                    # Ejecutar el procesamiento completo de la tarea (completar y actualizar alimento)
+                    completada_auto = await servicio_a_usar.verificar_y_completar_tarea_por_tiempo(tarea)
+                    if completada_auto:
+                        # Asegurar que el alimento se actualizó correctamente
+                        try:
+                            await persistence_service.actualizar_alimento_disponibilidad(tarea.alimento.id, False)
+                            print(f"Tarea {tarea.id} completada automáticamente desde status. Alimento {tarea.alimento.id} actualizado.")
+                        except Exception as e:
+                            print(f"Advertencia: No se pudo actualizar alimento {tarea.alimento.id} al completar tarea: {e}")
+                        
+                        # Recargar desde BD para obtener el estado actualizado
+                        tareas_actualizadas = await persistence_service.obtener_tareas()
+                        tarea_actualizada = next((t for t in tareas_actualizadas if t.id == tarea.id), None)
+                        if tarea_actualizada:
+                            tarea = tarea_actualizada
             
             # Obtener estado como string
             estado_str = tarea.estado.value if hasattr(tarea.estado, 'value') else str(tarea.estado)
@@ -1047,15 +1072,140 @@ def create_app(
     @app.post(
         "/tareas/{tarea_id}/cancelar", 
         tags=["Tareas"],
-        responses={404: RESPONSES[404]}
+        responses={
+            400: RESPONSES[400],
+            404: RESPONSES[404]
+        }
     )
     async def cancelar_tarea(tarea_id: str):
-        """Cancela una tarea en proceso."""
-        from ..services.timer_service import timer_service
-        success = await timer_service.cancelar_tarea(tarea_id)
-        if not success:
-            raise HTTPException(status_code=404, detail="Tarea no encontrada o no en proceso")
+        """
+        Cancela una tarea y la resetea completamente.
         
-        return {"message": f"Tarea {tarea_id} cancelada exitosamente"}
+        - Cambia el estado a CANCELADA (desde cualquier estado)
+        - Limpia fechas de inicio y fin
+        - Vuelve el alimento a disponible
+        - Persiste todos los cambios en BD
+        """
+        from ..services.timer_service import timer_service
+        from ..services.persistence_service import persistence_service
+        
+        # Normalizar ID de tarea
+        tarea_id_normalizado = str(tarea_id).strip()
+        
+        # Buscar tarea en memoria primero
+        tarea = None
+        servicio_a_usar = getattr(app.state, 'recoleccion_service', None) or recoleccion_service
+        
+        for t in servicio_a_usar.tareas_activas + servicio_a_usar.tareas_completadas:
+            if str(t.id).strip() == tarea_id_normalizado:
+                tarea = t
+                break
+        
+        # Si no está en memoria, buscar en BD (búsqueda más robusta)
+        if not tarea:
+            try:
+                tareas_bd = await persistence_service.obtener_tareas()
+                # Buscar por coincidencia exacta
+                for t in tareas_bd:
+                    if str(t.id).strip() == tarea_id_normalizado:
+                        tarea = t
+                        break
+                # Si no se encuentra, intentar case-insensitive
+                if not tarea:
+                    for t in tareas_bd:
+                        if str(t.id).strip().lower() == tarea_id_normalizado.lower():
+                            tarea = t
+                            break
+                
+                if tarea and tarea not in servicio_a_usar.tareas_activas:
+                    servicio_a_usar.tareas_activas.append(tarea)
+            except Exception as e:
+                print(f"Error buscando tarea en BD: {e}")
+        
+        if not tarea:
+            # Listar IDs disponibles para ayudar al usuario
+            try:
+                tareas_bd = await persistence_service.obtener_tareas()
+                ids_disponibles = [str(t.id).strip() for t in tareas_bd[:10]]
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Tarea '{tarea_id}' no encontrada en memoria ni en BD. IDs disponibles: {ids_disponibles}"
+                )
+            except:
+                raise HTTPException(status_code=404, detail=f"Tarea '{tarea_id}' no encontrada")
+        
+        # Obtener estado actual
+        estado_actual = tarea.estado.value if hasattr(tarea.estado, 'value') else str(tarea.estado)
+        print(f"Cancelando tarea {tarea.id}. Estado actual: {estado_actual}")
+        
+        # Intentar cancelar desde timer_service (si tiene timer activo)
+        success = False
+        if estado_actual == "en_proceso":
+            success = await timer_service.cancelar_tarea(tarea_id_normalizado)
+        
+        # Si no tenía timer activo o no estaba en_proceso, cancelarla manualmente
+        if not success:
+            # Cambiar estado a CANCELADA
+            tarea.estado = EstadoTarea.CANCELADA
+            
+            # RESETEAR: Limpiar fechas
+            tarea.fecha_inicio = None
+            tarea.fecha_fin = None
+            tarea.alimento_recolectado = 0
+            
+            # RESETEAR: Volver alimento a disponible
+            tarea.alimento.disponible = True
+            
+            # Cambiar estado de hormigas a DISPONIBLE
+            for hormiga in tarea.hormigas_asignadas:
+                from ..models.estado_hormiga import EstadoHormiga
+                hormiga.cambiar_estado(EstadoHormiga.DISPONIBLE)
+        
+        # SIEMPRE persistir cambios en BD (tanto si vino del timer como si se canceló manualmente)
+        try:
+            # Asegurar que el estado esté actualizado
+            if tarea.estado != EstadoTarea.CANCELADA:
+                tarea.estado = EstadoTarea.CANCELADA
+            
+            # Persistir tarea con todos los cambios
+            guardado_ok = await persistence_service.guardar_tarea(tarea)
+            if not guardado_ok:
+                print(f"ERROR: guardar_tarea retornó False para tarea {tarea.id}")
+            
+            # Actualizar estado explícitamente (usar el enum, no string)
+            estado_actualizado = await persistence_service.actualizar_estado_tarea(tarea.id, EstadoTarea.CANCELADA)
+            if not estado_actualizado:
+                print(f"ERROR: actualizar_estado_tarea retornó False para tarea {tarea.id}")
+            else:
+                print(f"✓ Estado de tarea {tarea.id} actualizado a CANCELADA en BD")
+            
+            # Actualizar alimento a disponible
+            alimento_actualizado = await persistence_service.actualizar_alimento_disponibilidad(tarea.alimento.id, True)
+            if not alimento_actualizado:
+                print(f"ERROR: actualizar_alimento_disponibilidad retornó False para alimento {tarea.alimento.id}")
+            
+            # Guardar evento
+            await persistence_service.guardar_evento(
+                "tarea_cancelada",
+                f"Tarea {tarea.id} cancelada y reseteada",
+                {"tarea_id": tarea.id, "alimento_id": tarea.alimento.id, "estado_anterior": estado_actual}
+            )
+            
+            print(f"✓ Tarea {tarea.id} cancelada y persistida en BD. Estado: CANCELADA, Alimento: disponible=True")
+        except Exception as e:
+            print(f"ERROR CRÍTICO: No se pudo persistir tarea cancelada en BD: {e}")
+            import traceback
+            traceback.print_exc()
+            # Aún así devolver éxito porque la cancelación en memoria funcionó
+        
+        return {
+            "message": f"Tarea {tarea_id} cancelada exitosamente",
+            "tarea_id": tarea.id,
+            "estado_anterior": estado_actual,
+            "estado_nuevo": tarea.estado.value if hasattr(tarea.estado, 'value') else str(tarea.estado),
+            "alimento_disponible": tarea.alimento.disponible,
+            "fecha_inicio": None,
+            "fecha_fin": None
+        }
     
     return app

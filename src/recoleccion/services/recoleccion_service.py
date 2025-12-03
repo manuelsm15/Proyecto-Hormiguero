@@ -58,19 +58,58 @@ class RecoleccionService:
             if tarea not in self.tareas_completadas:
                 self.tareas_completadas.append(tarea)
             
-            # Persistir tarea completada en BD
+            # Marcar el alimento como no disponible (recolectado) en memoria
+            tarea.alimento.marcar_como_recolectado()
+            
+            # Persistir tarea completada en BD y actualizar estado del alimento
             try:
                 from ..services.persistence_service import persistence_service
                 await persistence_service.guardar_tarea(tarea)
                 await persistence_service.actualizar_estado_tarea(tarea.id, tarea.estado)
+                # IMPORTANTE: Actualizar el estado del alimento en la tabla Alimentos
+                await persistence_service.actualizar_alimento_disponibilidad(tarea.alimento.id, False)
                 # Guardar evento de completado
                 await persistence_service.guardar_evento(
                     "tarea_completada_automatica",
                     f"Tarea {tarea.id} completada automáticamente por timer",
                     {"tarea_id": tarea.id, "alimento_id": tarea.alimento.id, "cantidad": tarea.alimento_recolectado}
                 )
+                print(f"Tarea {tarea.id} completada automáticamente. Alimento {tarea.alimento.id} marcado como recolectado en BD.")
             except Exception as e:
                 print(f"Advertencia: No se pudo persistir tarea completada automáticamente en BD: {e}")
+        
+        elif evento == "cancelada":
+            # Mover tarea de activas (si está ahí)
+            if tarea in self.tareas_activas:
+                self.tareas_activas.remove(tarea)
+            
+            # Asegurar que el estado sea CANCELADA
+            from ..models.estado_tarea import EstadoTarea
+            tarea.estado = EstadoTarea.CANCELADA
+            
+            # RESETEAR: Marcar el alimento como disponible nuevamente (no recolectado)
+            tarea.alimento.disponible = True
+            
+            # Persistir tarea cancelada en BD y actualizar estado del alimento a disponible
+            try:
+                from ..services.persistence_service import persistence_service
+                # IMPORTANTE: Persistir primero la tarea completa
+                await persistence_service.guardar_tarea(tarea)
+                # Luego actualizar explícitamente el estado a CANCELADA
+                await persistence_service.actualizar_estado_tarea(tarea.id, EstadoTarea.CANCELADA)
+                # IMPORTANTE: Actualizar el estado del alimento a DISPONIBLE en la tabla Alimentos
+                await persistence_service.actualizar_alimento_disponibilidad(tarea.alimento.id, True)
+                # Guardar evento de cancelación
+                await persistence_service.guardar_evento(
+                    "tarea_cancelada",
+                    f"Tarea {tarea.id} cancelada y reseteada",
+                    {"tarea_id": tarea.id, "alimento_id": tarea.alimento.id}
+                )
+                print(f"Tarea {tarea.id} cancelada. Estado CANCELADA persistido en BD. Alimento {tarea.alimento.id} vuelto a disponible.")
+            except Exception as e:
+                print(f"ERROR: No se pudo persistir tarea cancelada en BD: {e}")
+                import traceback
+                traceback.print_exc()
     
     async def consultar_alimentos_disponibles(
         self,
@@ -406,7 +445,18 @@ class RecoleccionService:
     
     async def procesar_recoleccion(self) -> List[TareaRecoleccion]:
         """
-        Procesa el ciclo completo de recolección.
+        Procesa el ciclo de recolección **hasta dejar las tareas en ejecución**.
+        
+        Antes este método creaba la tarea, asignaba hormigas, iniciaba el timer
+        y además completaba la tarea de inmediato, lo que hacía que el alimento
+        quedara agotado "de una vez".
+        
+        Ahora el flujo es:
+        - Crea tareas para los alimentos disponibles
+        - Solicita y asigna hormigas
+        - Inicia la tarea (estado EN_PROCESO) con timer
+        - NO completa la tarea aquí; la finalización la maneja el timer service
+          o un endpoint específico de completar.
         
         Returns:
             Lista de tareas procesadas
@@ -432,6 +482,7 @@ class RecoleccionService:
                     alimentos = []
             
             for alimento in alimentos:
+                # Solo procesar alimentos marcados como disponibles
                 if not alimento.disponible:
                     continue
                 
@@ -455,34 +506,20 @@ class RecoleccionService:
                 # 4. Asignar hormigas a la tarea (esto ya persiste en BD)
                 await self.asignar_hormigas_a_tarea(tarea, hormigas)
                 
-                # 5. Iniciar tarea (esto ya persiste en BD)
+                # 5. Iniciar tarea (esto ya persiste en BD y registra el timer)
                 await self.iniciar_tarea_recoleccion(tarea)
                 
-                # 6. Simular proceso de recolección
-                await asyncio.sleep(0.1)  # Simulación de tiempo de recolección
+                # A partir de aquí, la tarea queda en estado EN_PROCESO y el timer
+                # se encargará de completarla por tiempo, o bien se usará el endpoint
+                # de completar/cancelar tarea.
                 
-                # 7. Completar tarea (esto ya persiste en BD)
-                await self.completar_tarea_recoleccion(tarea, alimento.puntos_stock)
-                
-                # 8. Devolver hormigas
-                await self.devolver_hormigas(hormigas, alimento.puntos_stock)
-                
-                # 9. Intentar marcar alimento como recolectado en entorno (si disponible)
-                try:
-                    await self.entorno_service.marcar_alimento_como_recolectado(
-                        alimento.id, 
-                        cantidad_recolectada=alimento.puntos_stock
-                    )
-                except Exception:
-                    pass
-                
-                # Guardar evento de procesamiento exitoso
+                # Registrar evento de que la tarea fue creada e iniciada
                 try:
                     from ..services.persistence_service import persistence_service
                     await persistence_service.guardar_evento(
-                        "tarea_procesada",
-                        f"Tarea {tarea.id} procesada exitosamente",
-                        {"tarea_id": tarea.id, "alimento_id": alimento.id, "cantidad": alimento.puntos_stock}
+                        "tarea_iniciada_por_procesar",
+                        f"Tarea {tarea.id} creada e iniciada por /procesar",
+                        {"tarea_id": tarea.id, "alimento_id": alimento.id}
                     )
                 except Exception:
                     pass

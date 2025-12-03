@@ -70,12 +70,28 @@ class TareaRecoleccion:
         return all(hormiga.is_viva() for hormiga in self.hormigas_asignadas)
     
     def iniciar_tarea(self) -> None:
-        """Inicia la tarea de recolección."""
-        if self.estado != EstadoTarea.PENDIENTE:
-            raise ValueError("Solo se pueden iniciar tareas en estado PENDIENTE")
+        """
+        Inicia la tarea de recolección.
         
+        Permite iniciar desde:
+        - PENDIENTE: estado normal
+        - CANCELADA: se resetea y luego inicia (permite reiniciar tareas canceladas)
+        """
         if not self.tiene_suficientes_hormigas():
             raise ValueError("No se puede iniciar la tarea sin suficientes hormigas")
+        
+        # Si está cancelada, resetear primero
+        if self.estado == EstadoTarea.CANCELADA:
+            # Resetear fechas y alimento recolectado
+            self.fecha_inicio = None
+            self.fecha_fin = None
+            self.alimento_recolectado = 0
+            # Cambiar a PENDIENTE para poder iniciar
+            self.estado = EstadoTarea.PENDIENTE
+        
+        # Solo permitir iniciar desde PENDIENTE
+        if self.estado != EstadoTarea.PENDIENTE:
+            raise ValueError(f"Solo se pueden iniciar tareas en estado PENDIENTE. Estado actual: {self.estado.value}")
         
         self.estado = EstadoTarea.EN_PROCESO
         self.fecha_inicio = datetime.now()

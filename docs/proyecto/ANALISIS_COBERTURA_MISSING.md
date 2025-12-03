@@ -280,3 +280,5 @@ Las líneas sin cubrir se deben principalmente a:
 El archivo `test_api_cobertura_missing.py` contiene tests específicos para cubrir estas líneas faltantes.
 
 
+
+
