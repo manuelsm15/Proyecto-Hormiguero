@@ -1,0 +1,14 @@
+name = "hormiguero"
+compatibility_date = "2024-01-01"
+account_id = "719189be500e460aed972c47cd97b209"
+
+[env.production]
+name = "hormiguero"
+routes = [
+  { pattern = "hormiguero.yourdomain.com", zone_name = "yourdomain.com" }
+]
+
+# Variables de entorno (configurar en Cloudflare Dashboard)
+[vars]
+ENVIRONMENT = "production"
+

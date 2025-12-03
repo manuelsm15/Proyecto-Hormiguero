@@ -121,13 +121,11 @@ railway up
 railway domain
 ```
 
-#### Despliegue en Cloudflare
-Ver la guía completa en [DEPLOY_CLOUDFLARE.md](DEPLOY_CLOUDFLARE.md)
+#### Despliegue en Railway
+Ver la guía completa en [DEPLOY_RAILWAY.md](DEPLOY_RAILWAY.md)
 
 **Opciones disponibles:**
-1. **Cloudflare + Railway** (Recomendado): Despliega backend en Railway y usa Cloudflare como proxy/CDN
-2. **Cloudflare Pages**: Para sitios estáticos
-3. **Cloudflare Tunnel**: Para exponer backend local/privado
+1. **Railway** (Recomendado): Despliega backend en Railway como proxy/CDN
 
 **Deployment rápido con scripts:**
 ```bash
@@ -167,14 +165,16 @@ chmod +x cloudflare_deploy.sh
 - **Objetivo**: ≥80% ✅ **ALCANZADO**
 
 ### 👥 Autores
-- **Manuel** - Universidad Cenfotec
+- **Manuel de Jesus Sanabria Montoya**
+- **Randall Sánchez Rivera**
+- **Universidad Cenfotec**
 - **Email**: manuelsm15@gmail.com
 
 ### 📄 Licencia
-Este proyecto es parte del curso de Universidad Cenfotec.
+Este proyecto es parte del curso del PSWE-06 Calidad y Pruebas de Software de Universidad Cenfotec.
 
 ### 🔗 Enlaces
 - **GitHub**: https://github.com/manuelsm15/Proyecto-Hormiguero
-- **Railway**: https://TU_PROYECTO-production.up.railway.app
-- **Documentación**: https://TU_PROYECTO-production.up.railway.app/docs
+- **Railway**: https://proyecto-hormiguero-production.up.railway.app/docs#/
+- **Documentación**: https://proyecto-hormiguero-production.up.railway.app/docs#/
 

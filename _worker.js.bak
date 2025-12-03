@@ -1,0 +1,45 @@
+/**
+ * Cloudflare Worker para el proyecto Hormiguero
+ * Este worker actúa como proxy para la API FastAPI
+ * 
+ * IMPORTANTE: Para una API FastAPI completa, se recomienda usar Cloudflare Tunnel
+ * o desplegar el backend en Railway/Render y usar Cloudflare como proxy/CDN
+ */
+
+export default {
+  async fetch(request, env) {
+    // Obtener la URL del backend (configurar en Cloudflare Dashboard)
+    const BACKEND_URL = env.BACKEND_URL || 'https://hormiguero.up.railway.app';
+    
+    // Crear nueva URL con el backend
+    const url = new URL(request.url);
+    const backendUrl = new URL(BACKEND_URL);
+    backendUrl.pathname = url.pathname;
+    backendUrl.search = url.search;
+    
+    // Crear nueva request
+    const newRequest = new Request(backendUrl.toString(), {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+    });
+    
+    // Hacer la petición al backend
+    const response = await fetch(newRequest);
+    
+    // Retornar respuesta con CORS headers
+    const newResponse = new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: {
+        ...Object.fromEntries(response.headers),
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      },
+    });
+    
+    return newResponse;
+  },
+};
+
